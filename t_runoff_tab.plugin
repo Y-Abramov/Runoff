@@ -1,0 +1,50 @@
+{
+  "variables": {
+    "rf_tab_visible": "$(if,$(sysvar,task_runoff),0,1)"
+  },
+
+  "ribbon": {
+    "rbproj": {
+      "items": [
+        { "group": "runoff", "title": "Схема стока", "flags": "$(rf_tab_visible)" }
+      ]
+    },
+    "rbproj.runoff": {
+      "items": [
+        { "group": "runoff_scheme",  "title": "Схема" },
+        { "group": "runoff_network", "title": "Сеть" },
+        { "group": "runoff_report",  "title": "Ведомость" },
+        { "group": "runoff_close",   "title": "Закрыть" }
+      ]
+    },
+    "rbproj.runoff.runoff_scheme": {
+      "items": [
+        { "button": "rf_add",     "size": "large" },
+        { "button": "rf_edit",    "size": "small" },
+        { "button": "rf_explode", "size": "small" },
+        { "button": "rf_probe2",  "size": "small" }
+      ]
+    },
+    "rbproj.runoff.runoff_network": {
+      "items": [
+        { "button": "rf_network",      "size": "large" },
+        { "button": "rf_trace",        "size": "small" },
+        { "button": "rf_network_edit", "size": "small" },
+        { "button": "rf_pick_lines",   "size": "small" }
+      ]
+    },
+    "rbproj.runoff.runoff_report": {
+      "items": [
+        { "button": "rf_report",         "size": "large" },
+        { "button": "rf_network_report", "size": "small" },
+        { "button": "rf_legend",         "size": "small" },
+        { "button": "rf_about",          "size": "small" }
+      ]
+    },
+    "rbproj.runoff.runoff_close": {
+      "items": [
+        { "button": "id_hide_runoff_tab", "size": "large" }
+      ]
+    }
+  }
+}

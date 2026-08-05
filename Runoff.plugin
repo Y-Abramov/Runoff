@@ -1,0 +1,130 @@
+{
+  "assemblies": {
+    "abr_runoff": {
+      "assembly": "Abr.Runoff.dll, AbrRunoff.PluginHost"
+    }
+  },
+
+  "actions": {
+    "rf_add": {
+      "cmd":         "runoff_add",
+      "title":       "Схема стока",
+      "description": "Построить схему стока по кюветам выбранных дорог",
+      "icon":        "rf_add"
+    },
+    "rf_edit": {
+      "cmd":         "runoff_edit",
+      "title":       "Параметры",
+      "description": "Изменить параметры выбранной схемы стока",
+      "icon":        "rf_edit"
+    },
+    "rf_report": {
+      "cmd":         "runoff_report",
+      "title":       "Ведомость",
+      "description": "Ведомость участков стока",
+      "icon":        "rf_report"
+    },
+    "rf_explode": {
+      "cmd":         "runoff_explode",
+      "title":       "Взорвать",
+      "description": "Разложить схему в штатные примитивы",
+      "icon":        "rf_explode"
+    },
+    "rf_legend": {
+      "cmd":         "runoff_legend",
+      "title":       "Легенда",
+      "description": "Поставить на план условные обозначения схемы стока",
+      "icon":        "rf_report"
+    },
+    "rf_about": {
+      "cmd":         "about_runoff",
+      "title":       "О модуле",
+      "description": "Информация о модуле Схема стока",
+      "icon":        "abr_about"
+    },
+    "id_show_runoff_tab": {
+      "cmd":         "$(if,$(sysvar,task_runoff),sysvar task_runoff 0,sysvar task_runoff 1)",
+      "title":       "Схема стока",
+      "description": "Анализ направления стока по кюветам",
+      "icon":        "rf_module"
+    },
+    "id_hide_runoff_tab": {
+      "cmd":   "sysvar task_runoff 0",
+      "title": "Закрыть",
+      "icon":  "ic_close"
+    },
+    "rf_probe2": {
+      "cmd":         "runoff_probe2",
+      "title":       "Проба 2",
+      "description": "Временная разведка чужих моделей",
+      "icon":        "rf_report"
+    },
+    "rf_network": {
+      "cmd":         "runoff_network",
+      "title":       "Сеть водоотвода",
+      "description": "Построить сеть водоотвода по выбранным моделям",
+      "icon":        "rf_add"
+    },
+    "rf_network_edit": {
+      "cmd":         "runoff_network_edit",
+      "title":       "Параметры сети",
+      "description": "Изменить параметры выбранной сети водоотвода",
+      "icon":        "rf_edit"
+    },
+    "rf_pick_lines": {
+      "cmd":         "runoff_pick_lines",
+      "title":       "Указать линии",
+      "description": "Отметить структурные линии Площадки как канавы",
+      "icon":        "rf_edit"
+    },
+    "rf_trace": {
+      "cmd":         "runoff_trace",
+      "title":       "Проследить сток",
+      "description": "Показать путь стока от указанной точки до выпуска",
+      "icon":        "rf_report"
+    },
+    "rf_network_report": {
+      "cmd":         "runoff_network_report",
+      "title":       "Ведомость сети",
+      "description": "Ведомость бассейнов и диагнозов сети водоотвода",
+      "icon":        "rf_report"
+    }
+  },
+
+  "ribbon": {
+    "rbproj.modules": {
+      "items": [
+        { "group": "module_abr_runoff", "title": "Схема стока" }
+      ]
+    },
+    "rbproj.modules.module_abr_runoff": {
+      "items": [
+        { "button": "id_show_runoff_tab", "size": "large" }
+      ]
+    }
+  },
+
+  "menubars": {
+    "rbproj.modules_menu": {
+      "items": [ { "id": "rf_menu", "title": "Схема стока" } ]
+    },
+    "rbproj.modules_menu.rf_menu": {
+      "items": [
+        "rf_add",
+        "rf_edit",
+        "rf_explode",
+        "-",
+        "rf_network",
+        "rf_network_edit",
+        "rf_pick_lines",
+        "rf_trace",
+        "-",
+        "rf_report",
+        "rf_network_report",
+        "rf_legend",
+        "-",
+        "rf_about"
+      ]
+    }
+  }
+}
