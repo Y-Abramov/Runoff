@@ -95,17 +95,37 @@ namespace AbrRunoff.Entity
             m_Plan = new Drawing();
             var block = m_Plan.Blocks.Add("plan");
 
-            var elements = new List<DrainageElement>();
-            var pipes = new List<PipeEdgeInfo>();
-            NetworkSourceCollector.Collect(this, elements, pipes);
+            try
+            {
+                var elements = new List<DrainageElement>();
+                var pipes = new List<PipeEdgeInfo>();
+                NetworkSourceCollector.Collect(this, elements, pipes);
 
-            m_Net = NetworkBuilder.Build(elements, pipes, m_Settings, m_LinkTolerance);
-            m_Basins = BasinAssigner.Assign(m_Net);
+                m_Net = NetworkBuilder.Build(elements, pipes, m_Settings, m_LinkTolerance);
+                m_Basins = BasinAssigner.Assign(m_Net);
 
-            NetworkGeometry.Build(m_Net, m_Basins,
-                                  RunoffStyle.GlyphBase * m_Settings.GlyphScale,
-                                  m_Settings.TextHeight, detail,
-                                  delegate (DwgEntity e) { block.Add(e); });
+                NetworkGeometry.Build(m_Net, m_Basins,
+                                      RunoffStyle.GlyphBase * m_Settings.GlyphScale,
+                                      m_Settings.TextHeight, detail,
+                                      delegate (DwgEntity e) { block.Add(e); });
+            }
+            catch (Exception ex)
+            {
+                // ДИАГНОСТИКА: сборка сети - новый код, не пройден живым гейтом Task 0.
+                // Раньше исключение здесь падало необработанным до самого Execute()
+                // и роняло Robur с голым стеком без единой нашей строки. Теперь -
+                // тихо деградируем (пустая, но не null сеть) и пишем полный ToString()
+                // с местом падения на диск, а не молча глотаем ошибку.
+                try
+                {
+                    System.IO.File.WriteAllText(
+                        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "abr_runoff_network_error.txt"),
+                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\r\n" + ex);
+                }
+                catch { }
+                m_Net = new AbrRunoff.Core.Network.DrainageNetwork();
+                m_Basins = new Dictionary<int, int>();
+            }
 
             m_PlanBlock = block;
             return m_PlanBlock;
