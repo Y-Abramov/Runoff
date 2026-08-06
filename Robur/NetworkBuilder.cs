@@ -103,6 +103,10 @@ namespace AbrRunoff.Robur
                 SourceRef = el.SourceRef
             };
             net.Nodes.Add(node);
+            // Индекс NodeById кэшируется лениво и не знает про этот Add - без
+            // сброса второй и далее узел с Outlet (см. вызов ниже) не найдётся:
+            // NodeById(id) вернёт null -> NullReferenceException на .Outfall.
+            net.InvalidateIndex();
             nodeAt[station] = node.Id;
             return node.Id;
         }
