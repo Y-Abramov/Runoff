@@ -46,9 +46,14 @@ namespace AbrRunoff.Entity
 
         public override IEnumerable GetGrips(DwgEntity entity, object cadview)
         {
-            // Схема - производный объект, тянуть её за грипы бессмысленно:
-            // геометрия целиком определяется дорогой.
-            yield break;
+            // Саму схему за грипы не тянут - её геометрия целиком определяется
+            // дорогой. Грипы висят только на подписях: автомат разводит их как
+            // может, а на плотном узле последнее слово за проектировщиком.
+            var e = entity as DwgRunoffScheme;
+            if (e == null) return new object[0];
+
+            return LabelGrips.Build(entity, cadview, e.PlacedLabels,
+                                    e.SetLabelOffset, e.ResetLabelOffset);
         }
     }
 }

@@ -66,9 +66,15 @@ namespace AbrRunoff.Robur.Sources
 
                 for (int i = 0; i < count; i++)
                 {
-                    Vector3D v;
-                    try { v = (Vector3D)getPos.Invoke(line, new object[] { i }); }
+                    // Через VectorRead, а не жёстким приведением: у точки координаты
+                    // лежат в ПОЛЯХ, и чужой тип точки прежде молча съедался catch'ем,
+                    // оставляя элемент пустым (см. ловушку в VectorRead).
+                    object raw;
+                    try { raw = getPos.Invoke(line, new object[] { i }); }
                     catch { continue; }
+
+                    Vector3D v;
+                    if (!VectorRead.TryVector3D(raw, out v)) continue;
 
                     if (i > 0)
                     {

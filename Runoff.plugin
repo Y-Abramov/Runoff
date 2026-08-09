@@ -20,7 +20,7 @@
     },
     "rf_report": {
       "cmd":         "runoff_report",
-      "title":       "Ведомость",
+      "title":       "Ведомость стока",
       "description": "Ведомость участков стока",
       "icon":        "rf_report"
     },
@@ -32,9 +32,9 @@
     },
     "rf_legend": {
       "cmd":         "runoff_legend",
-      "title":       "Легенда",
-      "description": "Поставить на план условные обозначения схемы стока",
-      "icon":        "rf_report"
+      "title":       "Условные обозначения",
+      "description": "Поставить на план легенду знаков и таблицу бассейнов",
+      "icon":        "rf_legend"
     },
     "rf_about": {
       "cmd":         "about_runoff",
@@ -53,41 +53,29 @@
       "title": "Закрыть",
       "icon":  "ic_close"
     },
-    "rf_probe2": {
-      "cmd":         "runoff_probe2",
-      "title":       "Проба 2",
-      "description": "Временная разведка чужих моделей",
-      "icon":        "rf_report"
-    },
     "rf_network": {
       "cmd":         "runoff_network",
       "title":       "Сеть водоотвода",
       "description": "Построить сеть водоотвода по выбранным моделям",
-      "icon":        "rf_add"
+      "icon":        "rf_network"
     },
     "rf_network_edit": {
       "cmd":         "runoff_network_edit",
       "title":       "Параметры сети",
       "description": "Изменить параметры выбранной сети водоотвода",
-      "icon":        "rf_edit"
-    },
-    "rf_pick_lines": {
-      "cmd":         "runoff_pick_lines",
-      "title":       "Указать линии",
-      "description": "Отметить структурные линии Площадки как канавы",
-      "icon":        "rf_edit"
+      "icon":        "rf_network_edit"
     },
     "rf_trace": {
       "cmd":         "runoff_trace",
       "title":       "Проследить сток",
       "description": "Показать путь стока от указанной точки до выпуска",
-      "icon":        "rf_report"
+      "icon":        "rf_trace"
     },
     "rf_network_report": {
       "cmd":         "runoff_network_report",
-      "title":       "Ведомость сети",
-      "description": "Ведомость бассейнов и диагнозов сети водоотвода",
-      "icon":        "rf_report"
+      "title":       "Ведомость бассейнов",
+      "description": "Бассейны, выпуски и диагнозы сети водоотвода",
+      "icon":        "rf_network_report"
     }
   },
 
@@ -116,7 +104,6 @@
         "-",
         "rf_network",
         "rf_network_edit",
-        "rf_pick_lines",
         "rf_trace",
         "-",
         "rf_report",

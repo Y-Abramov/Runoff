@@ -92,6 +92,7 @@ namespace AbrRunoff
         }
 
         private static UI.ReportForm s_ReportForm;
+        private static UI.NetworkReportForm s_NetworkReportForm;
 
         [cmd("runoff_report")]
         public void Report()
@@ -221,9 +222,25 @@ namespace AbrRunoff
                 return;
 
             var space = drawing.ActiveSpace;
-            Entity.RunoffLegend.Build(
-                new Topomatic.Cad.Foundation.Vector2D(point.X, point.Y), settings,
+            var origin = new Topomatic.Cad.Foundation.Vector2D(point.X, point.Y);
+            Entity.RunoffLegend.Build(origin, settings,
                 delegate (Topomatic.Dwg.Entities.DwgEntity e) { space.Add(e); });
+
+            // Если в чертеже есть сеть - рядом с легендой знаков кладём сводку по
+            // её бассейнам. Легенда объясняет знаки, таблица отвечает на вопрос
+            // «сколько бассейнов и куда каждый уходит».
+            var net = FirstSelectedNetwork();
+            if (net != null)
+            {
+                var basins = AbrRunoff.Core.Network.BasinSummary.Build(net.Network, net.Basins);
+                if (basins.Count > 0)
+                {
+                    double gap = net.Settings.TextHeight * 4.0;
+                    var tableAt = new Topomatic.Cad.Foundation.Vector2D(origin.X, origin.Y - gap * 6.0);
+                    Entity.BasinTable.Build(tableAt, basins, net.Settings,
+                        delegate (Topomatic.Dwg.Entities.DwgEntity e) { space.Add(e); });
+                }
+            }
 
             CadView.Unlock();
             CadView.Invalidate();
@@ -311,30 +328,79 @@ namespace AbrRunoff
                 trace.Path.Count));
         }
 
-        [cmd("runoff_pick_lines")]
-        public void PickLines()
-        {
-            MessageDlg.Show("Выбор структурных линий Площадки доступен после подтверждения " +
-                            "доступа к модели (см. runoff/CLAUDE.md).");
-        }
+        // Команда `runoff_pick_lines` (отбор структурных линий Площадки) УДАЛЕНА
+        // 2026-08-09 вместе с кнопкой: она была заглушкой и показывала сообщение
+        // вместо работы. Пустая кнопка в релизе хуже отсутствующей - юзер жмёт её
+        // и получает отписку. Вернуть вместе с реализацией отбора линий; путь до
+        // данных подтверждён (SiteModel -> Surface -> StructureLines), не хватает
+        // только правила, какие из 272 линий `Канавы.site` считать водоотводом.
 
         [cmd("runoff_network_report")]
         public void NetworkReportCmd()
         {
+            if (s_NetworkReportForm != null && !s_NetworkReportForm.IsDisposed)
+            {
+                s_NetworkReportForm.BringToFront();
+                return;
+            }
+
             var net = FirstSelectedNetwork();
             if (net == null) { MessageDlg.Show("Выберите сеть водоотвода на плане и повторите команду."); return; }
 
+            var drawing = ActiveDrawing();
+            if (drawing == null) { MessageDlg.Show("Не найден активный чертёж."); return; }
+
             var rows = ReportNs.NetworkReport.Build(net.Network, net.Basins);
+
+            // Трубы с изъяном - отдельными строками, первыми: они не входят в
+            // цепочки, но проектировщик обязан о них узнать.
+            var pipeProblems = net.PipeProblemRows();
+            if (pipeProblems.Count > 0) rows.InsertRange(0, pipeProblems);
+
             if (rows.Count == 0) { MessageDlg.Show("Сеть пуста."); return; }
 
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine(string.Join(";", ReportNs.NetworkReport.Header()));
-            foreach (var r in rows) sb.AppendLine(string.Join(";", ReportNs.NetworkReport.ToCells(r)));
+            var view = CadView;
+            s_NetworkReportForm = new UI.NetworkReportForm(rows);
+            s_NetworkReportForm.PlaceTable = delegate (System.Collections.Generic.List<ReportNs.NetworkRow> r)
+            {
+                Topomatic.Cad.Foundation.Vector3D point;
+                if (!Topomatic.Cad.View.Hints.CadCursors.GetPoint(view, out point, "Точка вставки таблицы:"))
+                    return;
+                ReportNs.ReportTablePlacer.Place(drawing.ActiveSpace,
+                    new Topomatic.Cad.Foundation.Vector2D(point.X, point.Y), r, 1.5);
+                view.Unlock();
+                view.Invalidate();
+            };
+            s_NetworkReportForm.ZoomTo = delegate (ReportNs.NetworkRow r)
+            {
+                ZoomToChain(view, r);
+            };
+            s_NetworkReportForm.Show();
+        }
 
-            string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "abr_runoff_network.csv");
-            // UTF-8 с BOM: без него RU-Excel ломает кириллицу.
-            System.IO.File.WriteAllText(path, sb.ToString(), new System.Text.UTF8Encoding(true));
-            try { System.Diagnostics.Process.Start(path); } catch { MessageDlg.Show("Ведомость: " + path); }
+        /// <summary>
+        /// Зум к цепочке сети. Пикетажа у сети нет - габарит собираем прямо по
+        /// координатам начала и выпуска. Тупик выпуска не имеет, тогда зумим к
+        /// одному началу: показать нечего, но найти проблемное место надо.
+        /// </summary>
+        private static void ZoomToChain(Topomatic.Cad.View.CadView view, ReportNs.NetworkRow row)
+        {
+            try
+            {
+                if (row == null) return;
+
+                var points = new System.Collections.Generic.List<Topomatic.Cad.Foundation.Vector2D>
+                {
+                    new Topomatic.Cad.Foundation.Vector2D(row.X, row.Y)
+                };
+                if (row.HasOutfallPos)
+                    points.Add(new Topomatic.Cad.Foundation.Vector2D(row.OutfallX, row.OutfallY));
+
+                var box = Topomatic.Cad.Foundation.BoundingBox2D.CreateFromPoints(points.ToArray());
+                box.Inflate(20.0, 20.0);   // поля, иначе цепочка упрётся в рамку экрана
+                view.ZoomBound(box, true);
+            }
+            catch { }
         }
 
         private Entity.DwgDrainageNetwork FirstSelectedNetwork()
@@ -354,41 +420,6 @@ namespace AbrRunoff
             }
             catch { }
             return any;
-        }
-
-        // ВРЕМЕННАЯ. Удалить после закрытия гейта Task 0.
-        [cmd("runoff_probe2")]
-        public void Probe2()
-        {
-            string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "abr_runoff_probe2.txt");
-            var sb = new System.Text.StringBuilder();
-            try
-            {
-                sb.AppendLine("=== ABR | Runoff v2: разведка моделей ===");
-                sb.AppendLine("Дата: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
-                sb.AppendLine();
-
-                Robur.ModelProbe.DumpModels(sb);
-                sb.AppendLine();
-
-                var sw = System.Diagnostics.Stopwatch.StartNew();
-                int nodeCount = 0;
-                foreach (var rr in Robur.RoadAccess.GetOpenRoads())
-                {
-                    Robur.ModelProbe.DumpPipes(sb, rr.Road, rr.Name);
-                    sb.AppendLine();
-
-                    var settings = new Core.RunoffSettings();
-                    var stations = Robur.DitchReader.BuildStations(rr.Road, settings.SampleStep);
-                    nodeCount += stations.Count * 2;
-                }
-                sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                    "ВРЕМЯ: узлов-кандидатов {0}, построение {1} мс", nodeCount, sw.ElapsedMilliseconds));
-            }
-            catch (Exception ex) { sb.AppendLine("FATAL: " + ex); }
-
-            System.IO.File.WriteAllText(path, sb.ToString(), new System.Text.UTF8Encoding(true));
-            try { System.Diagnostics.Process.Start("notepad.exe", "\"" + path + "\""); } catch { }
         }
 
     }

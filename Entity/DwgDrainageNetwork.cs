@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using AbrRunoff.Core;
+using AbrRunoff.Core.Labels;
 using AbrRunoff.Core.Network;
 using AbrRunoff.Robur;
 using AbrRunoff.Robur.Sources;
@@ -30,11 +31,21 @@ namespace AbrRunoff.Entity
         private readonly List<string> m_SiteNames = new List<string>();
         private readonly List<string> m_NetworkNames = new List<string>();
 
+        // Ручные смещения подписей (грипы) - сериализуются вместе с объектом.
+        private readonly LabelOffsets m_LabelOffsets = new LabelOffsets();
+
         private DrainageNetwork m_Net;
         private Dictionary<int, int> m_Basins;
         private Drawing m_Plan;
         private DwgBlock m_PlanBlock;
         private bool m_PlanDetail;
+
+        // Подписи последнего ДЕТАЛЬНОГО построения - основа для грипов.
+        private readonly List<PlacedLabel> m_Placed = new List<PlacedLabel>();
+
+        // Трубы последнего построения - нужны ведомости, чтобы показать те из них,
+        // что не примыкают к водоотводу или лежат выше дна кювета.
+        private readonly List<PipeEdgeInfo> m_Pipes = new List<PipeEdgeInfo>();
 
         public override string EntityName { get { return ENTITY_NAME; } }
         public override string ObjectName { get { return "Сеть водоотвода"; } }
@@ -73,6 +84,68 @@ namespace AbrRunoff.Entity
             Invalidate();
         }
 
+        /// <summary>
+        /// Подписи последнего детального построения - контроллер вешает на них грипы.
+        /// Пусто на дальнем зуме: подписей там нет, таскать нечего.
+        ///
+        /// Отдаётся КОПИЯ: перерисовка чистит рабочий список, а грипы могут
+        /// обходить его в этот момент.
+        /// </summary>
+        [Browsable(false)]
+        internal IList<PlacedLabel> PlacedLabels
+        {
+            get { return m_PlanDetail ? new List<PlacedLabel>(m_Placed) : new List<PlacedLabel>(); }
+        }
+
+        /// <summary>
+        /// Строки ведомости про трубы с изъяном: не примыкает к водоотводу либо
+        /// лоток выше дна кювета. Труба, тихо выпавшая из сети, - худшее поведение.
+        /// </summary>
+        internal List<AbrRunoff.Report.NetworkRow> PipeProblemRows()
+        {
+            var rows = new List<AbrRunoff.Report.NetworkRow>();
+            if (m_Net == null) GetPlanBlock(true);
+
+            foreach (var p in m_Pipes)
+            {
+                if (p.Detached)
+                    rows.Add(AbrRunoff.Report.NetworkReport.PipeProblemRow(
+                        p.SourceRef, "труба не примыкает к водоотводу", p.Start.X, p.Start.Y));
+                else if (p.AboveDitch)
+                    rows.Add(AbrRunoff.Report.NetworkReport.PipeProblemRow(
+                        p.SourceRef,
+                        string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                                      "лоток выше дна кювета на {0:F2} м - вода не уйдёт", p.AboveDitchBy),
+                        p.Start.X, p.Start.Y));
+            }
+            return rows;
+        }
+
+        /// <summary>Запомнить, куда проектировщик оттащил подпись грипом.</summary>
+        internal void SetLabelOffset(string key, double dx, double dy)
+        {
+            m_LabelOffsets.Set(key, dx, dy);
+            InvalidateScheme();
+        }
+
+        /// <summary>Вернуть одну подпись на автоматическое место.</summary>
+        internal void ResetLabelOffset(string key)
+        {
+            m_LabelOffsets.Remove(key);
+            InvalidateScheme();
+        }
+
+        /// <summary>Вернуть все подписи сети на автоматические места.</summary>
+        public void ResetAllLabelOffsets()
+        {
+            m_LabelOffsets.Clear();
+            InvalidateScheme();
+        }
+
+        /// <summary>Есть ли хоть одна подпись, оттащенная вручную.</summary>
+        [Browsable(false)]
+        public bool HasManualLabels { get { return m_LabelOffsets.Count > 0; } }
+
         [Browsable(false)]
         public DrainageNetwork Network
         {
@@ -94,6 +167,7 @@ namespace AbrRunoff.Entity
 
             m_Plan = new Drawing();
             var block = m_Plan.Blocks.Add("plan");
+            m_Placed.Clear();
 
             try
             {
@@ -104,10 +178,15 @@ namespace AbrRunoff.Entity
                 m_Net = NetworkBuilder.Build(elements, pipes, m_Settings, m_LinkTolerance);
                 m_Basins = BasinAssigner.Assign(m_Net);
 
+                // Флаги проблем ставит Build - забираем трубы уже размеченными.
+                m_Pipes.Clear();
+                m_Pipes.AddRange(pipes);
+
                 NetworkGeometry.Build(m_Net, m_Basins,
                                       RunoffStyle.GlyphBase * m_Settings.GlyphScale,
                                       m_Settings.TextHeight, detail,
-                                      delegate (DwgEntity e) { block.Add(e); });
+                                      delegate (DwgEntity e) { block.Add(e); },
+                                      m_LabelOffsets, m_Placed, m_Settings);
             }
             catch (Exception ex)
             {
@@ -153,6 +232,7 @@ namespace AbrRunoff.Entity
             Copy(other.m_RoadNames, m_RoadNames);
             Copy(other.m_SiteNames, m_SiteNames);
             Copy(other.m_NetworkNames, m_NetworkNames);
+            m_LabelOffsets.CopyFrom(other.m_LabelOffsets);
             InvalidateScheme();
         }
 
@@ -173,6 +253,9 @@ namespace AbrRunoff.Entity
             node.AddDouble("sampleStep", m_Settings.SampleStep);
             node.AddDouble("glyphScale", m_Settings.GlyphScale);
             node.AddDouble("textHeight", m_Settings.TextHeight);
+            node.AddString("labelOffs", m_LabelOffsets.Serialize());
+            node.AddInt32("basinZone", (int)m_Settings.BasinZone);
+            node.AddDouble("basinOpacity", m_Settings.BasinZoneOpacity);
         }
 
         protected override void OnLoadFromStg(StgNode node)
@@ -189,6 +272,9 @@ namespace AbrRunoff.Entity
                 GlyphScale         = node.GetDouble("glyphScale", 1.0),
                 TextHeight         = node.GetDouble("textHeight", 1.5)
             };
+            m_Settings.BasinZone = (BasinZoneStyle)node.GetInt32("basinZone", (int)BasinZoneStyle.Transparent);
+            m_Settings.BasinZoneOpacity = node.GetDouble("basinOpacity", 18.0);
+            LabelOffsets.Deserialize(node.GetString("labelOffs", ""), m_LabelOffsets);
             InvalidateScheme();
         }
 

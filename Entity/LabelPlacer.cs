@@ -1,112 +1,85 @@
 using System;
 using System.Collections.Generic;
+using AbrRunoff.Core.Labels;
 using Topomatic.Cad.Foundation;
 using Topomatic.Dwg.Entities;
 
 namespace AbrRunoff.Entity
 {
     /// <summary>
-    /// Разводит подписи, чтобы они не наезжали друг на друга, и тянет выноску
-    /// от знака к сдвинутой подписи.
+    /// Тонкая обёртка над Core.Labels.LabelLayout: конвертирует Vector2D/DwgEntity
+    /// на границе, применяет ручные смещения и рисует текст с выноской. Сама
+    /// геометрия разведения живёт в Core - без Robur, тестируется.
     ///
-    /// В Robur автоматического разведения меток нет - на плотном пикетаже подписи
-    /// водоразделов и точек сбора складываются в нечитаемую кашу. Алгоритм простой
-    /// намеренно: жадный сдвиг вверх (или вниз) на свободное место, детерминированный
-    /// и предсказуемый - проектировщик должен понимать, почему подпись оказалась там.
+    /// Порядок приоритетов при размещении подписи:
+    ///   1) ручное смещение проектировщика (грип) - побеждает всегда;
+    ///   2) автоматическое разведение вокруг точки привязки;
+    ///   3) базовая позиция, если свободного места не нашлось (лучше наложится,
+    ///      чем подпись пропадёт).
+    ///
+    /// Один экземпляр = одна схема. Подписи ДВУХ схем (соседние дороги на стыке)
+    /// друг о друге не знают - известное ограничение; на стыке разводит рука
+    /// через грипы.
     /// </summary>
     internal sealed class LabelPlacer
     {
-        private struct Box
+        private readonly LabelLayout m_Layout = new LabelLayout();
+        private readonly LabelOffsets m_Offsets;
+        private readonly List<PlacedLabel> m_Placed;
+
+        /// <param name="offsets">Ручные смещения примитива; null - их нет.</param>
+        /// <param name="placed">Приёмник размещённых подписей для грипов; null - не собирать.</param>
+        internal LabelPlacer(LabelOffsets offsets, List<PlacedLabel> placed)
         {
-            public double X0, Y0, X1, Y1;
-            public bool Hits(Box o)
-            {
-                return !(o.X0 > X1 || o.X1 < X0 || o.Y0 > Y1 || o.Y1 < Y0);
-            }
+            m_Offsets = offsets;
+            m_Placed = placed;
         }
 
-        private readonly List<Box> m_Taken = new List<Box>();
-
-        /// <summary>Максимум попыток сдвига, дальше подпись ставится как есть.</summary>
-        private const int MaxTries = 14;
-
         /// <summary>
-        /// Ставит подпись рядом с anchor. Пробует сначала предпочтительную сторону,
-        /// затем ступенчато отодвигает по вертикали. Рисует выноску, если сдвиг заметный.
+        /// Ставит подпись рядом с anchor, при необходимости повёрнутую на rotationRad
+        /// (0 = горизонтально, как подписи точек; ненулевая - вдоль оси кювета).
         /// </summary>
-        internal void Place(string content, Vector2D anchor, double gap, double height,
-                            CadColor color, bool background, bool preferUp, Action<DwgEntity> emit)
+        internal void Place(string key, string content, Vector2D anchor, double gap, double height,
+                            CadColor color, bool preferUp, Action<DwgEntity> emit,
+                            double rotationRad = 0.0)
         {
             double width = GlyphBuilder.EstimateWidth(content, height);
-            double stepY = height * 1.6;
 
-            double baseX = anchor.X + gap;
-            double baseY = anchor.Y + (preferUp ? gap * 0.5 : -gap * 0.5);
+            double dx, dy;
+            LabelPlacement placed;
 
-            double x = baseX, y = baseY;
-            bool placed = false;
+            if (m_Offsets != null && m_Offsets.TryGet(key, out dx, out dy))
+                placed = m_Layout.PlaceManual(anchor.X, anchor.Y, dx, dy, width, height, rotationRad);
+            else
+                placed = m_Layout.Place(anchor.X, anchor.Y, width, height, rotationRad, gap, preferUp);
 
-            for (int i = 0; i < MaxTries; i++)
+            var target = new Vector2D(placed.X, placed.Y);
+
+            // Выноска: без неё оттащенная подпись теряет связь со своим знаком.
+            if (placed.Moved)
             {
-                // Чередуем вверх/вниз с нарастающим шагом: подписи расходятся
-                // симметрично вокруг знака, а не уползают все в одну сторону.
-                int ring = (i + 1) / 2;
-                int sign = (i % 2 == 0) ? 1 : -1;
-                if (!preferUp) sign = -sign;
-
-                y = baseY + sign * ring * stepY;
-                var box = new Box
-                {
-                    X0 = x - height * 0.3,
-                    Y0 = y - height * 0.8,
-                    X1 = x + width + height * 0.3,
-                    Y1 = y + height * 0.8
-                };
-
-                if (!Overlaps(box))
-                {
-                    m_Taken.Add(box);
-                    placed = true;
-                    break;
-                }
-            }
-
-            if (!placed)
-            {
-                // Место не нашлось - ставим на базовую позицию, пусть лучше
-                // наложится, чем подпись пропадёт.
-                y = baseY;
-                m_Taken.Add(new Box { X0 = x, Y0 = y, X1 = x + width, Y1 = y + height });
-            }
-
-            var target = new Vector2D(x, y);
-
-            // Выноска нужна только когда подпись реально уехала от знака.
-            if (Math.Abs(y - anchor.Y) > gap * 0.9)
-            {
-                GlyphBuilder.Line(anchor, new Vector2D(x - height * 0.3, y),
+                var dir = new Vector2D(Math.Cos(rotationRad), Math.Sin(rotationRad));
+                GlyphBuilder.Line(anchor,
+                                  new Vector2D(target.X - dir.X * height * 0.3, target.Y - dir.Y * height * 0.3),
                                   RunoffStyle.Muted, RunoffStyle.LineThin, emit);
             }
 
             double unused;
-            GlyphBuilder.Text(content, target, height, 0.0, color, background, emit, out unused);
+            GlyphBuilder.Text(content, target, height, rotationRad, color, emit, out unused);
+
+            if (m_Placed != null)
+                m_Placed.Add(new PlacedLabel
+                {
+                    Key = key,
+                    AnchorX = anchor.X, AnchorY = anchor.Y,
+                    X = target.X, Y = target.Y
+                });
         }
 
         /// <summary>Резервирует место без отрисовки - для знаков, чтобы подписи их обходили.</summary>
         internal void Reserve(Vector2D center, double radius)
         {
-            m_Taken.Add(new Box
-            {
-                X0 = center.X - radius, Y0 = center.Y - radius,
-                X1 = center.X + radius, Y1 = center.Y + radius
-            });
-        }
-
-        private bool Overlaps(Box box)
-        {
-            for (int i = 0; i < m_Taken.Count; i++)
-                if (m_Taken[i].Hits(box)) return true;
-            return false;
+            m_Layout.Reserve(center.X, center.Y, radius);
         }
     }
 }

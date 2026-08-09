@@ -137,6 +137,17 @@ namespace AbrRunoff.Robur
             return best;
         }
 
+        /// <summary>
+        /// Труба входит в сеть ВРЕЗКОЙ в ребро, а не поиском готового узла.
+        ///
+        /// Прежняя логика искала ближайший УЗЕЛ в допуске: узлы стоят только в
+        /// характерных точках, поэтому труба в середине перегона узла не находила
+        /// и молча выпадала из сети (найдено 2026-08-09). Теперь конец трубы
+        /// разрезает то ребро, к которому примыкает.
+        ///
+        /// Труба, не примыкающая верхним концом ни к чему, в сеть не входит - но
+        /// это не «нет трубы», а диагноз: вызывающий обязан сообщить о ней.
+        /// </summary>
         private static void AddPipe(DrainageNetwork net, ref int nextId, PipeEdgeInfo pipe, double tolerance)
         {
             // Вода течёт от конца с большей отметкой к меньшей.
@@ -145,10 +156,22 @@ namespace AbrRunoff.Robur
             double upperZ = Math.Max(pipe.StartZ, pipe.EndZ);
             double lowerZ = Math.Min(pipe.StartZ, pipe.EndZ);
 
-            int fromNode = NearestNode(net, upper, tolerance);
-            if (fromNode < 0) return;   // труба ни к чему не примыкает - в сеть не входит
+            int fromNode = EdgeSplitter.AttachAt(net, upper.X, upper.Y, tolerance, ref nextId);
+            if (fromNode < 0) fromNode = NearestNode(net, upper, tolerance);
+            if (fromNode < 0) { pipe.Detached = true; return; }
 
-            int toNode = NearestNode(net, lower, tolerance);
+            // Лоток входа выше дна кювета - вода в трубу физически не пойдёт.
+            // Отметки лотков известны из модели `.clv`, так что проверка честная,
+            // а не «по пикету с допуском», как было в v1.
+            var inlet = net.NodeById(fromNode);
+            if (inlet != null && upperZ > inlet.Z)
+            {
+                pipe.AboveDitch = true;
+                pipe.AboveDitchBy = upperZ - inlet.Z;
+            }
+
+            int toNode = EdgeSplitter.AttachAt(net, lower.X, lower.Y, tolerance, ref nextId);
+            if (toNode < 0) toNode = NearestNode(net, lower, tolerance);
             if (toNode < 0)
             {
                 // Дальний конец никуда не примыкает - значит труба уводит воду
@@ -188,12 +211,32 @@ namespace AbrRunoff.Robur
         }
     }
 
-    /// <summary>Труба, приведённая к геометрии плана. Заполняется в Task 7 из Alignment.Pipes.</summary>
+    /// <summary>
+    /// Труба, приведённая к геометрии плана. Источник - модели `.clv`
+    /// (`CulvertAccess`); `Alignment.Pipes` на реальных проектах пуст.
+    /// </summary>
     internal sealed class PipeEdgeInfo
     {
         public Vector2D Start, End;
         public double StartZ, EndZ;
         public double Diameter;
         public string SourceRef = "";
+
+        /// <summary>
+        /// Труба не примыкает к водоотводу верхним концом и в сеть не вошла.
+        /// Ставится при сборке - чтобы она попала в ведомость с диагнозом,
+        /// а не исчезла молча.
+        /// </summary>
+        public bool Detached;
+
+        /// <summary>
+        /// Лоток трубы выше дна кювета в точке примыкания - вода в трубу не уйдёт.
+        /// Проверка стала возможна, когда отметки лотков нашлись в моделях `.clv`
+        /// (`Prism.*CulvertPosition.Y`).
+        /// </summary>
+        public bool AboveDitch;
+
+        /// <summary>Насколько лоток выше дна кювета, м (значимо при AboveDitch).</summary>
+        public double AboveDitchBy;
     }
 }

@@ -5,12 +5,30 @@ using Topomatic.Dwg.Entities;
 
 namespace AbrRunoff.Report
 {
+    /// <summary>
+    /// Кладёт таблицу на план. Знает только о сетке строк - какая это ведомость
+    /// (участки стока или бассейны), ему безразлично: обе кладутся одинаково.
+    /// </summary>
     internal static class ReportTablePlacer
     {
         internal static void Place(DwgBlock space, Vector2D origin, IList<ReportRow> rows, double textH)
         {
             var cells = new List<string[]> { RunoffReport.Header() };
             foreach (var r in rows) cells.Add(RunoffReport.ToCells(r));
+            Place(space, origin, cells, textH);
+        }
+
+        internal static void Place(DwgBlock space, Vector2D origin, IList<NetworkRow> rows, double textH)
+        {
+            var cells = new List<string[]> { NetworkReport.Header() };
+            foreach (var r in rows) cells.Add(NetworkReport.ToCells(r));
+            Place(space, origin, cells, textH);
+        }
+
+        /// <summary>Общая укладка: шапка первой строкой, дальше данные.</summary>
+        private static void Place(DwgBlock space, Vector2D origin, IList<string[]> cells, double textH)
+        {
+            if (cells == null || cells.Count == 0) return;
 
             int cols = cells[0].Length;
             var colW = new double[cols];

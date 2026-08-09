@@ -30,6 +30,66 @@ namespace AbrRunoff.Entity
             emit(hatch);
         }
 
+        /// <summary>
+        /// Полупрозрачная зона бассейна. Кладётся ПЕРВОЙ в блок - иначе накроет
+        /// собственные линии схемы (грабли белых подложек под подписями).
+        ///
+        /// `DwgHatch.Transparency` принимает 0..255, где 0 = непрозрачно,
+        /// 255 = полностью прозрачно (`Percentage` = обратная величина, проверено
+        /// рефлексией SDK 16.0.62.12). Просят долю непрозрачности в процентах -
+        /// так понятнее на месте вызова.
+        /// </summary>
+        internal static void Zone(IList<Vector2D> pts, CadColor color, double opacityPercent,
+                                  Action<DwgEntity> emit)
+        {
+            if (pts == null || pts.Count < 3) return;
+
+            var hatch = MakeHatch(pts, color);
+            hatch.PatternName = "SOLID";
+            hatch.Transparency = OpacityToTransparency(opacityPercent);
+            emit(hatch);
+        }
+
+        /// <summary>
+        /// Штрихованная зона бассейна - запасной язык, если прозрачность в чертеже
+        /// не читается. Наклон свой у каждого бассейна, поэтому зоны различимы
+        /// даже в монохромной печати.
+        /// </summary>
+        internal static void ZoneHatched(IList<Vector2D> pts, CadColor color, double angleDeg,
+                                         double scale, Action<DwgEntity> emit)
+        {
+            if (pts == null || pts.Count < 3) return;
+
+            var hatch = MakeHatch(pts, color);
+            hatch.PatternName = "ANSI31";
+            hatch.PatternAngle = angleDeg;
+            hatch.PatternScale = scale <= 0.0 ? 1.0 : scale;
+            emit(hatch);
+        }
+
+        private static DwgHatch MakeHatch(IList<Vector2D> pts, CadColor color)
+        {
+            var hatch = new DwgHatch();
+            hatch.Color = color;
+
+            var path = new PolylineBoundaryPath();
+            foreach (var p in pts) path.Add(new BugleVector2D(p));
+            path.IsClosed = true;
+            hatch.BoundaryPath.Add(path);
+            return hatch;
+        }
+
+        /// <summary>Доля непрозрачности в процентах -> Transparency (0 непрозр., 255 прозр.).</summary>
+        private static Transparency OpacityToTransparency(double opacityPercent)
+        {
+            if (opacityPercent < 0.0) opacityPercent = 0.0;
+            if (opacityPercent > 100.0) opacityPercent = 100.0;
+            int value = (int)Math.Round(255.0 * (1.0 - opacityPercent / 100.0));
+            if (value < 0) value = 0;
+            if (value > 255) value = 255;
+            return new Transparency(value);
+        }
+
         /// <summary>Контур многоугольника.</summary>
         internal static void Outline(IList<Vector2D> pts, CadColor color, Lineweight lw,
                                      bool closed, Action<DwgEntity> emit)
@@ -94,22 +154,22 @@ namespace AbrRunoff.Entity
         }
 
         /// <summary>
-        /// Текст с непрозрачной подложкой: без неё подпись тонет в линиях плана.
-        /// Возвращает габарит занятого места - вызывающий разводит подписи по нему.
+        /// Текст подписи. Возвращает габарит занятого места - вызывающий разводит
+        /// подписи по нему.
+        ///
+        /// Непрозрачной подложки под текстом НЕТ сознательно (убрана 2026-08-08).
+        /// Подложка рисовалась как отдельный DwgHatch перед своим текстом, поэтому
+        /// подложка следующей подписи ложилась ПОВЕРХ текста предыдущей - на плотном
+        /// узле получалась россыпь белых прямоугольников без текста вообще. Порядок
+        /// внутри блока эту гонку не лечит: подписи разных объектов схемы (по одному
+        /// на дорогу) рисуются независимо и порядок между ними не определён.
+        /// Читаемость теперь обеспечивают разведение (LabelLayout) и ручной оттаск
+        /// подписи грипом.
         /// </summary>
         internal static void Text(string content, Vector2D anchor, double height, double rotationRad,
-                                  CadColor color, bool withBackground, Action<DwgEntity> emit,
-                                  out double width)
+                                  CadColor color, Action<DwgEntity> emit, out double width)
         {
             width = EstimateWidth(content, height);
-
-            if (withBackground)
-            {
-                double pad = height * 0.28;
-                var box = BoxAt(anchor, width, height, pad, rotationRad);
-                Fill(box, RunoffStyle.Paper, emit);
-                Outline(box, RunoffStyle.Muted, RunoffStyle.LineThin, true, emit);
-            }
 
             var text = new DwgText();
             text.Content = content;
@@ -127,27 +187,6 @@ namespace AbrRunoff.Entity
         internal static double EstimateWidth(string content, double height)
         {
             return (content ?? "").Length * height * RunoffStyle.CharWidthRatio;
-        }
-
-        /// <summary>Прямоугольник подложки, повёрнутый вместе с текстом.</summary>
-        private static Vector2D[] BoxAt(Vector2D anchor, double width, double height, double pad, double rot)
-        {
-            double cos = Math.Cos(rot), sin = Math.Sin(rot);
-            double x0 = -pad, x1 = width + pad;
-            double y0 = -height * 0.5 - pad, y1 = height * 0.5 + pad;
-
-            return new[]
-            {
-                Local(anchor, x0, y0, cos, sin),
-                Local(anchor, x1, y0, cos, sin),
-                Local(anchor, x1, y1, cos, sin),
-                Local(anchor, x0, y1, cos, sin)
-            };
-        }
-
-        private static Vector2D Local(Vector2D origin, double dx, double dy, double cos, double sin)
-        {
-            return new Vector2D(origin.X + dx * cos - dy * sin, origin.Y + dx * sin + dy * cos);
         }
     }
 }

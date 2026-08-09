@@ -24,10 +24,17 @@ namespace AbrRunoff.Robur
         /// <summary>Точек поперечника, среди которых ищем дно.</summary>
         private const int MaxPointIndex = 9;
 
+        /// <summary>
+        /// Предел правдоподобия врезки дна в землю, м. Кювет глубже пяти метров -
+        /// это уже не кювет, а отметка не из той оперы. Проверено на живом
+        /// проекте: без этого предела в данные пролезали глубины до -52 м.
+        /// </summary>
+        private const double SaneDepthLimit = 5.0;
+
         internal sealed class SideKeys
         {
             public string Flags;      // LEFT_FLAGS
-            public string DynamicHk;  // DYNAMIC_LEFT_HK
+            public string DynamicHk;  // DYNAMIC_LEFT_HK - АБСОЛЮТНАЯ отметка дна
             public string OffsX;      // LOFFSX{i}
             public string OffsY;      // LOFFSY{i}
 
@@ -135,12 +142,37 @@ namespace AbrRunoff.Robur
                 }
                 calibratedIndex = idx;
 
+                // Отметка ЧЁРНОЙ ЗЕМЛИ в ТОЙ ЖЕ точке поперечника: `{L|R}OFFSY{i}EG`.
+                //
+                // ⚠ EGY здесь НЕ ГОДИТСЯ, даже запасным (пробовали 2026-08-09).
+                // Он относится к оси ДОРОГИ, а не к кювету, и на АД1 дал глубины
+                // до -52 м: дно якобы на 52 метра выше земли. По такому мусору
+                // правило отбрасывало 162 отсчёта из 227. Нет отметки у самой
+                // точки дна - значит данных нет, и трогать ничего нельзя.
+                string suffix = idx.ToString(CultureInfo.InvariantCulture);
+                double groundZ = GetDouble(p, keys.OffsY + suffix + "EG");
+                bool hasGround = groundZ > 0.0;
+
+                // Санитарный порог: врезка/задир больше SaneDepthLimit - признак
+                // того, что отметка не та, а не рельефа. Лучше не знать глубину,
+                // чем вырезать кювет по заведомой чуши.
+                if (hasGround && Math.Abs(groundZ - bottomZ) > SaneDepthLimit) hasGround = false;
+
+                // ⚠ `{L|R}_HK` КАК ГЛУБИНУ ВРЕЗКИ НЕ БРАТЬ - пробовали, откатили
+                // 2026-08-09. Совпадение HK с разностью (OFFSY{i}EG - дно) на трёх
+                // пикетах `До_примыкания ПК1` (0.069/0.293/0.500 против
+                // 0.079/0.310/0.511) оказалось СЛУЧАЙНЫМ. На АД1 HK утверждает
+                // «врезано 0.5..1.08 м на всех 237 отсчётах», тогда как отметки
+                // земли говорят обратное. По методике HK - «высота ПОЛКИ кювета»
+                // (бермы), а не глубина выемки; это разные величины.
                 samples.Add(new DitchSample
                 {
-                    Station = st,
-                    BottomZ = bottomZ,
-                    Offset  = GetDouble(p, keys.OffsX + idx.ToString(CultureInfo.InvariantCulture)),
-                    IsDitch = true
+                    Station   = st,
+                    BottomZ   = bottomZ,
+                    Offset    = GetDouble(p, keys.OffsX + suffix),
+                    IsDitch   = true,
+                    GroundZ   = groundZ,
+                    HasGround = hasGround
                 });
             }
 
@@ -183,6 +215,17 @@ namespace AbrRunoff.Robur
             if (p == null || !p.TryGetValue(key, out v) || v == null) return 0.0;
             try { return Convert.ToDouble(v, CultureInfo.InvariantCulture); }
             catch { return 0.0; }
+        }
+
+        /// <summary>
+        /// Ключ в словаре есть. Для глубины кювета это важно отличать от нуля:
+        /// HK = 0 - осмысленный ответ «кювет не врезан», а отсутствие ключа -
+        /// «неизвестно», и трогать такой отсчёт нельзя.
+        /// </summary>
+        private static bool IsPresent(IDictionary<string, object> p, string key)
+        {
+            object v;
+            return p != null && p.TryGetValue(key, out v) && v != null;
         }
     }
 }

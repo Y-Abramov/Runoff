@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using AbrRunoff.Core.Network;
 
 namespace AbrRunoff.Report
@@ -16,6 +17,13 @@ namespace AbrRunoff.Report
         public string Confidence = "";
         public string Status = "";
         public bool IsProblem;
+
+        // Координаты плана для зума по двойному клику. У сети нет пикетажа
+        // (элементы приходят из разных моделей), поэтому зумить можно только
+        // по координате - в отличие от ведомости стока, где есть дорога и ПК.
+        public double X, Y;                       // начало цепочки
+        public double OutfallX, OutfallY;         // выпуск, если цепочка до него дошла
+        public bool HasOutfallPos;
     }
 
     /// <summary>Строки ведомости по сети. Без Topomatic - линкуется в тесты.</summary>
@@ -67,7 +75,9 @@ namespace AbrRunoff.Report
                     TotalLength = trace.TotalLength,
                     WorstGradePermille = trace.WorstGradePermille == double.MaxValue
                                          ? 0.0 : trace.WorstGradePermille,
-                    Confidence = ConfidenceName(trace.WorstConfidence)
+                    Confidence = ConfidenceName(trace.WorstConfidence),
+                    X = node.X,
+                    Y = node.Y
                 };
 
                 switch (trace.Outcome)
@@ -77,6 +87,12 @@ namespace AbrRunoff.Report
                         row.Outfall = OutfallName(outfall);
                         row.Status = trace.Splits ? "Сток разделяется" : "норма";
                         row.IsProblem = trace.Splits;
+                        if (outfall != null)
+                        {
+                            row.OutfallX = outfall.X;
+                            row.OutfallY = outfall.Y;
+                            row.HasOutfallPos = true;
+                        }
                         break;
                     case TraceOutcome.Cycle:
                         row.Outfall = "-";
@@ -144,6 +160,81 @@ namespace AbrRunoff.Report
                 r.Confidence,
                 r.Status
             };
+        }
+
+        /// <summary>
+        /// Строка ведомости для трубы, которая не вошла в сеть или вошла с изъяном.
+        ///
+        /// Труба, молча выпавшая из расчёта, - худшее поведение: проектировщик
+        /// решит, что она учтена. Поэтому у неё своя строка, помеченная проблемой,
+        /// с координатой для зума. Бассейна у такой трубы нет - в колонке прочерк.
+        /// </summary>
+        public static NetworkRow PipeProblemRow(string source, string status, double x, double y)
+        {
+            return new NetworkRow
+            {
+                NodeId = -1,
+                Source = source ?? "труба",
+                Basin = 0,                 // 0 -> в ячейке «-», см. ToCells
+                Outfall = "-",
+                TotalLength = 0.0,
+                WorstGradePermille = 0.0,
+                Confidence = "-",
+                Status = status,
+                IsProblem = true,
+                X = x,
+                Y = y,
+                HasOutfallPos = false
+            };
+        }
+
+        // Выгрузка - тем же форматом, что ведомость стока: инструмент один,
+        // и файлы из обеих ведомостей должны открываться одинаково.
+
+        public static string ToCsv(IList<NetworkRow> rows)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine(string.Join(";", Escape(Header())));
+            foreach (var r in rows)
+                sb.AppendLine(string.Join(";", Escape(ToCells(r))));
+            return sb.ToString();
+        }
+
+        public static string ToHtml(IList<NetworkRow> rows)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("<!doctype html><meta charset=\"utf-8\"><title>Ведомость по бассейнам</title>");
+            sb.AppendLine("<style>body{font:14px Segoe UI,sans-serif}table{border-collapse:collapse}" +
+                          "td,th{border:1px solid #ccc;padding:4px 8px}tr.p{background:#fde8e6}</style>");
+            sb.AppendLine("<h1>Ведомость по бассейнам</h1><table><tr>");
+            foreach (var h in Header()) sb.Append("<th>").Append(HtmlEscape(h)).Append("</th>");
+            sb.AppendLine("</tr>");
+            foreach (var r in rows)
+            {
+                sb.Append(r.IsProblem ? "<tr class=\"p\">" : "<tr>");
+                foreach (var c in ToCells(r)) sb.Append("<td>").Append(HtmlEscape(c)).Append("</td>");
+                sb.AppendLine("</tr>");
+            }
+            sb.AppendLine("</table>");
+            return sb.ToString();
+        }
+
+        private static string[] Escape(string[] cells)
+        {
+            var res = new string[cells.Length];
+            for (int i = 0; i < cells.Length; i++)
+            {
+                string c = cells[i] ?? "";
+                res[i] = c.IndexOf(';') >= 0 || c.IndexOf('"') >= 0
+                    ? "\"" + c.Replace("\"", "\"\"") + "\""
+                    : c;
+            }
+            return res;
+        }
+
+        private static string HtmlEscape(string s)
+        {
+            return (s ?? "").Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
         }
     }
 }

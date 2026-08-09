@@ -26,7 +26,35 @@ namespace AbrRunoff.Robur
 
                 elements.AddRange(new RoadDitchSource(rr.Road, rr.Name).Read(settings));
                 elements.AddRange(new RoadTraySource(rr.Road, rr.Name).Read(settings));
-                CollectPipes(pipes, rr);
+                CollectPipes(pipes, rr);      // запасной путь: трубы в самой дороге
+            }
+
+            // Трубы проекта - отдельные модели `.clv`. Берутся ВСЕ открытые, без
+            // отбора по имени: труба принадлежит не дороге, а месту, и какие
+            // именно кюветы она свяжет, решает геометрия при врезке.
+            CollectCulverts(pipes);
+        }
+
+        /// <summary>
+        /// Водопропускные трубы из моделей `.clv`. Отметки лотков берутся прямо из
+        /// модели, поэтому направление течения в трубе - её собственное, а не
+        /// выведенное из отметок кюветов.
+        /// </summary>
+        private static void CollectCulverts(List<PipeEdgeInfo> pipes)
+        {
+            foreach (var c in CulvertAccess.GetOpenCulverts())
+            {
+                if (c.Length < 1e-6) continue;
+
+                pipes.Add(new PipeEdgeInfo
+                {
+                    Start = c.EndA,
+                    End = c.EndB,
+                    StartZ = c.ElevationA,
+                    EndZ = c.ElevationB,
+                    Diameter = c.Diameter,
+                    SourceRef = c.Name
+                });
             }
         }
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using AbrRunoff.Core;
+using AbrRunoff.Core.Labels;
 using AbrRunoff.Robur;
 using Topomatic.Cad.Foundation;
 using Topomatic.Dwg;
@@ -25,9 +26,12 @@ namespace AbrRunoff.Entity
     internal static class RunoffGeometry
     {
         /// <summary>Складывает всю графику схемы в переданный приёмник.</summary>
+        /// <param name="offsets">Ручные смещения подписей (грипы); null - их нет.</param>
+        /// <param name="placed">Приёмник размещённых подписей для грипов; null - не собирать.</param>
         internal static void Build(RunoffResult result, IList<DitchSample> left, IList<DitchSample> right,
                                    PlanProjector proj, RunoffSettings settings, bool detail,
-                                   Action<DwgEntity> emit)
+                                   Action<DwgEntity> emit,
+                                   LabelOffsets offsets = null, List<PlacedLabel> placed = null)
         {
             double glyph = RunoffStyle.GlyphBase * settings.GlyphScale;
             double textH = settings.TextHeight;
@@ -52,13 +56,9 @@ namespace AbrRunoff.Entity
                 EmitArrows(seg, SamplesOf(seg.Side, left, right), proj, settings.ArrowStep, glyph, emit);
             }
 
-            // 3. Подписи уклона вдоль участка - повёрнуты по оси кювета.
-            if (settings.ShowGradeLabels)
-                foreach (var seg in result.Segments)
-                    EmitGradeLabel(seg, SamplesOf(seg.Side, left, right), proj, textH * 0.85, settings, emit);
-
-            // 4. Знаки характерных точек и разведённые подписи к ним.
-            var placer = new LabelPlacer();
+            // 3. Знаки характерных точек - раньше подписей, чтобы подписи (и точечные,
+            //    и уклона) обходили уже занятое место, а не наезжали на знаки.
+            var placer = new LabelPlacer(offsets, placed);
             var anchors = new List<KeyValuePair<FlowPoint, Vector2D>>();
 
             foreach (var pt in result.Points)
@@ -70,17 +70,24 @@ namespace AbrRunoff.Entity
                 anchors.Add(new KeyValuePair<FlowPoint, Vector2D>(pt, pos));
             }
 
-            if (!settings.ShowPointLabels) return;
+            // 4. Подписи характерных точек - в общий placer, приоритет выше подписей
+            //    уклона (у них есть содержательный смысл "НЕТ ВЫПУСКА", их нельзя терять).
+            if (settings.ShowPointLabels)
+                foreach (var kv in anchors)
+                {
+                    var pt = kv.Key;
+                    // Левый кювет подписываем выше линии, правый ниже - подписи двух
+                    // сторон не сталкиваются даже на узкой трассе.
+                    bool up = pt.Side == DitchSide.Left;
+                    placer.Place(LabelKeys.Point(pt.Side, pt.Kind, pt.Station), LabelFor(pt), kv.Value,
+                                 glyph * RunoffStyle.LabelGap, textH, ColorOfPoint(pt), up, emit);
+                }
 
-            foreach (var kv in anchors)
-            {
-                var pt = kv.Key;
-                // Левый кювет подписываем выше линии, правый ниже - подписи двух
-                // сторон не сталкиваются даже на узкой трассе.
-                bool up = pt.Side == DitchSide.Left;
-                placer.Place(LabelFor(pt), kv.Value, glyph * RunoffStyle.LabelGap, textH,
-                             ColorOfPoint(pt), settings.LabelBackground, up, emit);
-            }
+            // 5. Подписи уклона вдоль участка - повёрнуты по оси кювета, тот же
+            //    placer: обходят и знаки, и уже поставленные подписи точек.
+            if (settings.ShowGradeLabels)
+                foreach (var seg in result.Segments)
+                    EmitGradeLabel(seg, SamplesOf(seg.Side, left, right), proj, textH * 0.85, settings, placer, emit);
         }
 
         // ─────────────────────────────────────────────── линия дна по участкам
@@ -198,7 +205,8 @@ namespace AbrRunoff.Entity
         // ─────────────────────────────────────────────── подпись уклона
 
         private static void EmitGradeLabel(FlowSegment seg, IList<DitchSample> samples, PlanProjector proj,
-                                           double height, RunoffSettings settings, Action<DwgEntity> emit)
+                                           double height, RunoffSettings settings, LabelPlacer placer,
+                                           Action<DwgEntity> emit)
         {
             // На коротком участке подпись длиннее самого участка - только мешает.
             if (seg.Length < height * 12.0) return;
@@ -222,9 +230,11 @@ namespace AbrRunoff.Entity
             var anchor = new Vector2D(pos.X + norm.X * height * 1.6 * side,
                                       pos.Y + norm.Y * height * 1.6 * side);
 
-            double unused;
-            GlyphBuilder.Text(content, anchor, height, rot, ColorOfSegment(seg),
-                              settings.LabelBackground, emit, out unused);
+            // gap=0 - anchor уже отодвинут от линии дна через norm выше; placer
+            // при столкновении с уже занятым местом (знаки, подписи точек, другие
+            // подписи уклона) доищет свободный слот дальше по вертикали.
+            placer.Place(LabelKeys.Grade(seg.Side, seg.StationFrom, seg.StationTo), content, anchor,
+                         0.0, height, ColorOfSegment(seg), seg.Side == DitchSide.Left, emit, rot);
         }
 
         // ─────────────────────────────────────────────── знаки характерных точек

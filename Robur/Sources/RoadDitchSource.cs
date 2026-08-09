@@ -31,16 +31,21 @@ namespace AbrRunoff.Robur.Sources
 
             var proj = new PlanProjector(m_Road);
 
-            AddSide(result, proj, stations, DitchSide.Left, "лево");
-            AddSide(result, proj, stations, DitchSide.Right, "право");
+            AddSide(result, proj, stations, DitchSide.Left, "лево", settings);
+            AddSide(result, proj, stations, DitchSide.Right, "право", settings);
             return result;
         }
 
         private void AddSide(List<DrainageElement> result, PlanProjector proj,
-                             IList<double> stations, DitchSide side, string sideName)
+                             IList<double> stations, DitchSide side, string sideName,
+                             RunoffSettings settings)
         {
             string warning;
             var samples = DitchReader.Read(m_Road, side, stations, out warning);
+
+            // Задранный выше земли профиль - не кювет, а приём проектировщика
+            // (конструкция там не строится). Иначе горб читался бы водоразделом.
+            DitchExistence.Apply(samples, settings == null ? 0.05 : settings.MinDitchDepth);
 
             var el = new DrainageElement
             {

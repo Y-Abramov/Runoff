@@ -18,7 +18,6 @@ namespace AbrRunoff.UI
         private readonly NumericUpDown m_ArrowStep = Num(1, 500, 0);
         private readonly NumericUpDown m_GlyphScale = Num(0.2m, 10, 2);
         private readonly NumericUpDown m_TextHeight = Num(0.2m, 20, 2);
-        private readonly CheckBox m_LabelBg = new CheckBox { Text = "Подложка под подписями", AutoSize = true };
         private readonly CheckBox m_PointLabels = new CheckBox { Text = "Подписи характерных точек", AutoSize = true };
         private readonly CheckBox m_GradeLabels = new CheckBox { Text = "Подписи уклона вдоль участков", AutoSize = true };
 
@@ -38,29 +37,31 @@ namespace AbrRunoff.UI
 
             // Разделение на «что считаем» и «как показываем»: правят их в разное
             // время и по разным поводам, мешать в одну кучу нельзя.
+            // Названия строк - по СМЫСЛУ для проектировщика, а не по имени поля.
+            // «Порог плато» и «шаг сэмплирования» - жаргон разработчика: юзер
+            // спросил, что это значит, и был прав.
             var gAnalysis = MakeGroup("Анализ", 12, 12, 376, 152);
-            AddRow(gAnalysis, 0, "Минимальный уклон дна, промилле", m_MinGrade, (decimal)Value.MinGradePermille);
-            AddRow(gAnalysis, 1, "Порог плато, промилле", m_PlateauEps, (decimal)Value.PlateauEpsPermille);
-            AddRow(gAnalysis, 2, "Допуск поиска трубы, м", m_PipeTol, (decimal)Value.PipeTolerance);
-            AddRow(gAnalysis, 3, "Шаг сэмплирования, м", m_SampleStep, (decimal)Value.SampleStep);
+            AddRow(gAnalysis, 0, "Мин. допустимый уклон дна, промилле", m_MinGrade, (decimal)Value.MinGradePermille);
+            AddRow(gAnalysis, 1, "Уклон, ниже которого вода стоит, промилле", m_PlateauEps, (decimal)Value.PlateauEpsPermille);
+            AddRow(gAnalysis, 2, "Допуск поиска трубы у точки сбора, м", m_PipeTol, (decimal)Value.PipeTolerance);
+            AddRow(gAnalysis, 3, "Шаг разбивки профиля, м", m_SampleStep, (decimal)Value.SampleStep);
 
             var gLook = MakeGroup("Оформление", 12, 176, 376, 216);
             AddRow(gLook, 0, "Шаг стрелок, м", m_ArrowStep, (decimal)Value.ArrowStep);
             AddRow(gLook, 1, "Масштаб знаков", m_GlyphScale, (decimal)Value.GlyphScale);
             AddRow(gLook, 2, "Высота подписей, м", m_TextHeight, (decimal)Value.TextHeight);
 
-            m_LabelBg.Checked = Value.LabelBackground;
             m_PointLabels.Checked = Value.ShowPointLabels;
             m_GradeLabels.Checked = Value.ShowGradeLabels;
-            m_LabelBg.Location = new Point(16, 116);
-            m_PointLabels.Location = new Point(16, 142);
-            m_GradeLabels.Location = new Point(16, 168);
-            gLook.Controls.Add(m_LabelBg);
+            m_PointLabels.Location = new Point(16, 116);
+            m_GradeLabels.Location = new Point(16, 142);
             gLook.Controls.Add(m_PointLabels);
             gLook.Controls.Add(m_GradeLabels);
 
             Controls.Add(gAnalysis);
             Controls.Add(gLook);
+
+            ExplainSettings();
 
             var sep = new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Color.FromArgb(220, 220, 220) };
             var bottom = new Panel { Dock = DockStyle.Bottom, Height = 44 };
@@ -89,6 +90,41 @@ namespace AbrRunoff.UI
             CancelButton = cancel;
         }
 
+        /// <summary>
+        /// Подсказки к параметрам. Название в строке отвечает «что это», подсказка -
+        /// «зачем крутить и что будет». Без них два параметра читались как жаргон:
+        /// юзер прямо спросил, что означают «порог плато» и «шаг сэмплирования».
+        /// </summary>
+        private void ExplainSettings()
+        {
+            var tip = new ToolTip { AutoPopDelay = 20000, InitialDelay = 300, ReshowDelay = 100 };
+
+            tip.SetToolTip(m_MinGrade,
+                "Норма продольного уклона дна кювета (СП 34.13330 - 5 промилле).\n" +
+                "Участки положе помечаются жёлтым как «уклон ниже нормы»:\n" +
+                "вода идёт, но медленно, кювет заиливается.");
+
+            tip.SetToolTip(m_PlateauEps,
+                "Ниже этого уклона считается, что вода СТОИТ - направления нет.\n" +
+                "Такой участок помечается красным знаком «плато».\n" +
+                "Нужен потому, что отметки дна всегда содержат мелкий шум:\n" +
+                "без порога любые доли промилле выглядели бы как течение.");
+
+            tip.SetToolTip(m_PipeTol,
+                "Насколько далеко от точки сбора искать трубу по пикету.\n" +
+                "Труба в этом допуске - точка сбора считается имеющей выпуск,\n" +
+                "иначе это бессточное понижение (красное двойное кольцо).");
+
+            tip.SetToolTip(m_SampleStep,
+                "Через сколько метров считывать отметку дна с продольного профиля.\n" +
+                "Мельче шаг - точнее ловятся короткие перегибы и водоразделы,\n" +
+                "но дольше пересчёт. 5 м хватает для большинства проектов.");
+
+            tip.SetToolTip(m_ArrowStep, "Через сколько метров ставить стрелку направления течения.");
+            tip.SetToolTip(m_GlyphScale, "Множитель размера знаков: водоразделов, точек сбора, стрелок.");
+            tip.SetToolTip(m_TextHeight, "Высота подписей в метрах плана.");
+        }
+
         private void LoadFrom(RunoffSettings s)
         {
             m_MinGrade.Value   = Clamp(m_MinGrade, (decimal)s.MinGradePermille);
@@ -98,7 +134,6 @@ namespace AbrRunoff.UI
             m_ArrowStep.Value  = Clamp(m_ArrowStep, (decimal)s.ArrowStep);
             m_GlyphScale.Value = Clamp(m_GlyphScale, (decimal)s.GlyphScale);
             m_TextHeight.Value = Clamp(m_TextHeight, (decimal)s.TextHeight);
-            m_LabelBg.Checked      = s.LabelBackground;
             m_PointLabels.Checked  = s.ShowPointLabels;
             m_GradeLabels.Checked  = s.ShowGradeLabels;
         }
@@ -112,7 +147,6 @@ namespace AbrRunoff.UI
             Value.ArrowStep          = (double)m_ArrowStep.Value;
             Value.GlyphScale         = (double)m_GlyphScale.Value;
             Value.TextHeight         = (double)m_TextHeight.Value;
-            Value.LabelBackground    = m_LabelBg.Checked;
             Value.ShowPointLabels    = m_PointLabels.Checked;
             Value.ShowGradeLabels    = m_GradeLabels.Checked;
         }

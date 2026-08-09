@@ -101,14 +101,14 @@ namespace AbrRunoff.Entity
 
             double unused;
             GlyphBuilder.Text("СХЕМА СТОКА", new Vector2D(origin.X, origin.Y + titleH * 0.4),
-                              titleH, 0.0, RunoffStyle.Normal, false, emit, out unused);
+                              titleH, 0.0, RunoffStyle.Normal, emit, out unused);
 
             double yRow = origin.Y - titleH * 1.4;
             for (int i = 0; i < rows.Count; i++)
             {
                 rows[i](yRow);
                 GlyphBuilder.Text(captions[i], new Vector2D(textX, yRow), h, 0.0,
-                                  RunoffStyle.Muted, false, emit, out unused);
+                                  RunoffStyle.Muted, emit, out unused);
                 yRow -= rowH;
             }
         }

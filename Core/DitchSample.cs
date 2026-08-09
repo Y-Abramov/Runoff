@@ -17,5 +17,11 @@ namespace AbrRunoff.Core
 
         /// <summary>Кювет на этом пикете есть (бит SLOPE_FLAG_USE_DITCH_PROFILE взведён).</summary>
         public bool IsDitch;
+
+        /// <summary>Отметка земли (чёрная) у дна кювета, м. Значима только при HasGround.</summary>
+        public double GroundZ;
+
+        /// <summary>Отметка земли известна - без неё проверку врезки в рельеф не сделать.</summary>
+        public bool HasGround;
     }
 }

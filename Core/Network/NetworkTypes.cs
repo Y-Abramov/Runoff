@@ -2,7 +2,9 @@ namespace AbrRunoff.Core.Network
 {
     public enum NodeKind
     {
-        SegmentEnd, Watershed, Collector, PipeMouth, NetworkNode
+        SegmentEnd, Watershed, Collector, PipeMouth, NetworkNode,
+        /// <summary>Точка врезки трубы в кювет - создана разрезом ребра, не источником.</summary>
+        PipeJunction
     }
 
     /// <summary>Законный конец сети. Всё остальное - тупик.</summary>

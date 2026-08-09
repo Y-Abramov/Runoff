@@ -34,8 +34,13 @@ namespace AbrRunoff.Entity
 
         public override IEnumerable GetGrips(DwgEntity entity, object cadview)
         {
-            // Сеть - производный объект: геометрия задаётся источниками.
-            yield break;
+            // Сама сеть за грипы не тянется (геометрия задаётся источниками) -
+            // грипы висят только на подписях выпусков и тупиков.
+            var e = entity as DwgDrainageNetwork;
+            if (e == null) return new object[0];
+
+            return LabelGrips.Build(entity, cadview, e.PlacedLabels,
+                                    e.SetLabelOffset, e.ResetLabelOffset);
         }
     }
 }
