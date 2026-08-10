@@ -5,7 +5,7 @@
     <OutputType>Library</OutputType>
     <AssemblyName>Abr.Runoff</AssemblyName>
     <RootNamespace>AbrRunoff</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <LangVersion>latest</LangVersion>
     <RoburInstallDir Condition="'$(RoburInstallDir)' == ''">C:\Program Files\Topomatic Robur Road 16.0</RoburInstallDir>
   </PropertyGroup>
@@ -64,6 +64,13 @@
     <Reference Include="Topomatic.Alg.Road">
       <HintPath>$(RoburInstallDir)\Topomatic.Alg.Road.dll</HintPath>
       <Private>false</Private>
+    </Reference>
+    <!-- Мост MCP Топоматика. DLL приезжает пакетом robur-mcp и лежит рядом с Robur -
+         в .tpm модуля её класть нельзя, отсюда Private=false. -->
+    <Reference Include="Topomatic.ToolBridge">
+      <HintPath>$(RoburInstallDir)\Topomatic.ToolBridge.dll</HintPath>
+      <Private>false</Private>
+      <SpecificVersion>False</SpecificVersion>
     </Reference>
   </ItemGroup>
 

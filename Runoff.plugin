@@ -5,6 +5,14 @@
     }
   },
 
+  "broadcasts": {
+    "tool_request": "runoff_generate_tools"
+  },
+
+  "variables": {
+    "rf_btn_checked": "$(if,$(sysvar,task_runoff),20,16)"
+  },
+
   "actions": {
     "rf_add": {
       "cmd":         "runoff_add",
@@ -46,7 +54,8 @@
       "cmd":         "$(if,$(sysvar,task_runoff),sysvar task_runoff 0,sysvar task_runoff 1)",
       "title":       "Схема стока",
       "description": "Анализ направления стока по кюветам",
-      "icon":        "rf_module"
+      "icon":        "rf_module",
+      "flags":       "$(rf_btn_checked)"
     },
     "id_hide_runoff_tab": {
       "cmd":   "sysvar task_runoff 0",
