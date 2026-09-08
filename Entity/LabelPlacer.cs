@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Abr.Labels;
 using AbrRunoff.Core.Labels;
 using Topomatic.Cad.Foundation;
 using Topomatic.Dwg.Entities;
@@ -48,10 +49,15 @@ namespace AbrRunoff.Entity
             double dx, dy;
             LabelPlacement placed;
 
+            // gap/preferUp остались во внешней сигнатуре ради вызывающего кода,
+            // но движок Shared/Labels их больше не принимает - сторона (Left/Right/
+            // Auto) теперь горизонтальная, а не "выше/ниже линии". Поведение
+            // разведения для Runoff меняется этим переездом (задокументировано
+            // в runoff/CLAUDE.md); список подписей и API вызывающего кода - нет.
             if (m_Offsets != null && m_Offsets.TryGet(key, out dx, out dy))
                 placed = m_Layout.PlaceManual(anchor.X, anchor.Y, dx, dy, width, height, rotationRad);
             else
-                placed = m_Layout.Place(anchor.X, anchor.Y, width, height, rotationRad, gap, preferUp);
+                placed = m_Layout.Place(anchor.X, anchor.Y, width, height, rotationRad, LabelSide.Auto);
 
             var target = new Vector2D(placed.X, placed.Y);
 

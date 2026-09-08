@@ -77,6 +77,7 @@
   <ItemGroup>
     <Compile Include="..\Shared\Bootstrap\*.cs" LinkBase="Shared\Bootstrap" />
     <Compile Include="..\Shared\Sdk\*.cs" LinkBase="Shared\Sdk" />
+    <Compile Include="..\Shared\Labels\*.cs" LinkBase="Shared\Labels" />
   </ItemGroup>
 
   <ItemGroup>
