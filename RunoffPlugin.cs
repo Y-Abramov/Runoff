@@ -435,28 +435,56 @@ namespace AbrRunoff
             var drawing = ActiveDrawing();
             if (drawing == null) { MessageDlg.Show("Не найден активный чертёж."); return; }
 
-            using (var dlg = new UI.WatershedDialog(surfaces, Robur.CulvertAccess.GetOpenCulverts(),
-                                                    CadView, new Core.Watershed.WatershedSettings()))
+            var culverts = Robur.CulvertAccess.GetOpenCulverts();
+            UI.WatershedDialogState state = null;
+
+            // Указание точки на плане закрывает диалог (DialogResult.Retry) вместо
+            // пикания изнутри открытого модального окна: последнее ненадёжно у
+            // разных хозяев окна (см. историю правок). Пикаем точку тем же приёмом,
+            // что и остальные команды модуля, и открываем диалог заново с состоянием.
+            while (true)
             {
-                if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-
-                var errors = new System.Collections.Generic.List<string>();
-                foreach (var built in dlg.Results)
+                using (var dlg = new UI.WatershedDialog(surfaces, culverts, new Core.Watershed.WatershedSettings(), state))
                 {
-                    if (built.Result == null) { errors.Add(built.OutletName + ": " + built.Error); continue; }
+                    var result = dlg.ShowDialog();
 
-                    var entity = new Entity.DwgWatershed();
-                    entity.SetResult(built.SurfaceName, built.DesignSurfaceName, built.OutletName,
-                                     built.OutletX, built.OutletY, built.Step, built.Settings,
-                                     built.SourceHash, built.Result);
-                    drawing.ActiveSpace.Add(entity);
+                    if (result == System.Windows.Forms.DialogResult.Retry)
+                    {
+                        state = dlg.CaptureState();
+                        Topomatic.Cad.Foundation.Vector3D point;
+                        if (Topomatic.Cad.View.Hints.CadCursors.GetPoint(CadView, out point, "Точка замыкающего створа:"))
+                        {
+                            state.ManualOutlets.Add(new Robur.WatershedRequest
+                            {
+                                OutletName = "Точка " + (state.ManualOutlets.Count + 1),
+                                X = point.X,
+                                Y = point.Y
+                            });
+                        }
+                        continue;
+                    }
+
+                    if (result != System.Windows.Forms.DialogResult.OK) return;
+
+                    var errors = new System.Collections.Generic.List<string>();
+                    foreach (var built in dlg.Results)
+                    {
+                        if (built.Result == null) { errors.Add(built.OutletName + ": " + built.Error); continue; }
+
+                        var entity = new Entity.DwgWatershed();
+                        entity.SetResult(built.SurfaceName, built.DesignSurfaceName, built.OutletName,
+                                         built.OutletX, built.OutletY, built.Step, built.Settings,
+                                         built.SourceHash, built.Result);
+                        drawing.ActiveSpace.Add(entity);
+                    }
+
+                    CadView.Unlock();
+                    CadView.Invalidate();
+
+                    if (errors.Count > 0)
+                        MessageDlg.Show("Не удалось построить:\r\n" + string.Join("\r\n", errors.ToArray()));
+                    return;
                 }
-
-                CadView.Unlock();
-                CadView.Invalidate();
-
-                if (errors.Count > 0)
-                    MessageDlg.Show("Не удалось построить:\r\n" + string.Join("\r\n", errors.ToArray()));
             }
         }
 

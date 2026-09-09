@@ -5,16 +5,33 @@ using System.Windows.Forms;
 using Abr.Sdk;
 using AbrRunoff.Core.Watershed;
 using AbrRunoff.Robur;
-using Topomatic.Cad.View;
 
 namespace AbrRunoff.UI
 {
+    /// <summary>
+    /// Состояние диалога, сохраняемое между переоткрытиями ради указания точки
+    /// на плане (см. WatershedDialog.PickPointRequested). Пикать точку из уже
+    /// открытого модального диалога ненадёжно - у Robur свой хозяин окна, и
+    /// Hide()/EnableWindow-трюки не приживаются везде одинаково. Здесь диалог
+    /// закрывается, команда пикает точку тем же приёмом, что и везде в модуле
+    /// (CadCursors.GetPoint напрямую, без открытого диалога поверх), и открывает
+    /// диалог заново с этим состоянием.
+    /// </summary>
+    internal sealed class WatershedDialogState
+    {
+        internal int SurfaceIndex;
+        internal int DesignIndex;
+        internal string StepText;
+        internal List<bool> OutletChecked = new List<bool>();
+        internal List<WatershedRequest> ManualOutlets = new List<WatershedRequest>();
+    }
+
     /// <summary>Выбор поверхности, проектной поверхности, створов и шага для расчёта водосбора.</summary>
     internal sealed class WatershedDialog : Form
     {
         private readonly IList<SurfaceRef> m_Surfaces;
-        private readonly CadView m_CadView;
         private readonly WatershedSettings m_Settings;
+        private readonly List<WatershedRequest> m_ManualOutlets;
 
         private readonly ComboBox m_SurfaceCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
         private readonly ComboBox m_DesignCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
@@ -28,11 +45,11 @@ namespace AbrRunoff.UI
         internal List<WatershedBuildResult> Results { get; private set; }
 
         internal WatershedDialog(IList<SurfaceRef> surfaces, IList<CulvertRef> culverts,
-                                 CadView cadView, WatershedSettings defaults)
+                                 WatershedSettings defaults, WatershedDialogState state)
         {
             m_Surfaces = surfaces;
-            m_CadView = cadView;
             m_Settings = defaults ?? new WatershedSettings();
+            m_ManualOutlets = state != null ? state.ManualOutlets : new List<WatershedRequest>();
             Results = new List<WatershedBuildResult>();
 
             Text = "Водосбор";
@@ -78,7 +95,13 @@ namespace AbrRunoff.UI
             {
                 var req = new WatershedRequest { OutletName = c.Name, X = c.Upper.X, Y = c.Upper.Y };
                 m_OutletData.Add(req);
-                m_Outlets.Items.Add(FormatOutlet(req), true);
+            }
+            foreach (var req in m_ManualOutlets) m_OutletData.Add(req);
+
+            for (int i = 0; i < m_OutletData.Count; i++)
+            {
+                bool isChecked = state == null || i >= state.OutletChecked.Count || state.OutletChecked[i];
+                m_Outlets.Items.Add(FormatOutlet(m_OutletData[i]), isChecked);
             }
             m_Outlets.Location = new Point(12, y);
             m_Outlets.Size = new Size(436, 180);
@@ -88,7 +111,7 @@ namespace AbrRunoff.UI
 
             var pick = UiTheme.MakeButton("Указать точку на плане", BtnKind.Secondary, 200, 26);
             pick.Location = new Point(12, y);
-            pick.Click += OnPickPoint;
+            pick.Click += delegate { DialogResult = DialogResult.Retry; };
             Controls.Add(pick);
 
             var sep = new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Color.FromArgb(220, 220, 220) };
@@ -114,12 +137,32 @@ namespace AbrRunoff.UI
 
             if (surfaces.Count > 0)
             {
-                m_SurfaceCombo.SelectedIndex = 0;
-                double step = SurfaceReader.SuggestStep(surfaces[0], m_Settings);
-                m_Step.Text = step.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+                m_SurfaceCombo.SelectedIndex = state != null && state.SurfaceIndex < surfaces.Count ? state.SurfaceIndex : 0;
+                if (state == null)
+                {
+                    double step = SurfaceReader.SuggestStep(surfaces[0], m_Settings);
+                    m_Step.Text = step.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+                }
             }
-            m_DesignCombo.SelectedIndex = 0;
+            m_DesignCombo.SelectedIndex = state != null && state.DesignIndex >= 0 && state.DesignIndex <= surfaces.Count
+                ? state.DesignIndex : 0;
+            if (state != null && !string.IsNullOrEmpty(state.StepText)) m_Step.Text = state.StepText;
             UpdateEstimate();
+        }
+
+        /// <summary>Снимок состояния перед закрытием ради указания точки - см. WatershedDialogState.</summary>
+        internal WatershedDialogState CaptureState()
+        {
+            var state = new WatershedDialogState
+            {
+                SurfaceIndex = m_SurfaceCombo.SelectedIndex,
+                DesignIndex = m_DesignCombo.SelectedIndex,
+                StepText = m_Step.Text,
+                ManualOutlets = m_ManualOutlets
+            };
+            for (int i = 0; i < m_Outlets.Items.Count; i++)
+                state.OutletChecked.Add(m_Outlets.GetItemChecked(i));
+            return state;
         }
 
         private void AddLabel(string text, int x, int y)
@@ -177,60 +220,6 @@ namespace AbrRunoff.UI
                 : SystemColors.ControlText;
         }
 
-        private void OnPickPoint(object sender, EventArgs e)
-        {
-            if (m_CadView == null)
-            {
-                MessageBox.Show(this, "Нет доступа к плану чертежа.", "Водосбор",
-                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            // ShowDialog() выключает (WS_DISABLED) нативное окно-владельца, активное
-            // на момент открытия - обычно главное окно Robur. Hide() это не снимает:
-            // клик в плане не долетает, GetPoint висит без обратной связи. Application.
-            // OpenForms не годится, если владелец - не управляемый .NET Form (похоже,
-            // так и есть - первая попытка через него результата не дала). Берём хендл
-            // владельца НАПРЯМУЮ через Win32 GetWindow(GW_OWNER) и включаем его -
-            // работает независимо от того, чем является окно-владелец.
-            IntPtr ownerHandle = GetWindow(Handle, GW_OWNER);
-            bool ownerWasDisabled = ownerHandle != IntPtr.Zero && !IsWindowEnabled(ownerHandle);
-            if (ownerWasDisabled) EnableWindow(ownerHandle, true);
-
-            Hide();
-            try
-            {
-                Topomatic.Cad.Foundation.Vector3D point;
-                if (Topomatic.Cad.View.Hints.CadCursors.GetPoint(m_CadView, out point, "Точка замыкающего створа:"))
-                {
-                    var req = new WatershedRequest
-                    {
-                        OutletName = "Точка " + (m_OutletData.Count + 1),
-                        X = point.X,
-                        Y = point.Y
-                    };
-                    m_OutletData.Add(req);
-                    m_Outlets.Items.Add(FormatOutlet(req), true);
-                }
-            }
-            finally
-            {
-                if (ownerWasDisabled) EnableWindow(ownerHandle, false);
-                Show();
-            }
-        }
-
-        private const uint GW_OWNER = 4;
-
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
-
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern bool EnableWindow(IntPtr hWnd, bool bEnable);
-
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern bool IsWindowEnabled(IntPtr hWnd);
-
         private void OnBuild(object sender, EventArgs e)
         {
             var surface = SelectedSurface();
@@ -247,7 +236,8 @@ namespace AbrRunoff.UI
 
             if (outlets.Count == 0)
             {
-                MessageBox.Show(this, "Не отмечено ни одного створа.", "Водосбор",
+                MessageBox.Show(this, "Не отмечено ни одного створа. Отметьте трубу в списке либо " +
+                                "укажите точку на плане.", "Водосбор",
                                 MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
