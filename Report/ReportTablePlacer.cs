@@ -25,6 +25,13 @@ namespace AbrRunoff.Report
             Place(space, origin, cells, textH);
         }
 
+        internal static void Place(DwgBlock space, Vector2D origin, IList<WatershedRow> rows, double textH)
+        {
+            var cells = new List<string[]> { WatershedReport.Header() };
+            foreach (var r in rows) cells.Add(WatershedReport.ToCells(r));
+            Place(space, origin, cells, textH);
+        }
+
         /// <summary>Общая укладка: шапка первой строкой, дальше данные.</summary>
         private static void Place(DwgBlock space, Vector2D origin, IList<string[]> cells, double textH)
         {
