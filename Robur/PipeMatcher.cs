@@ -1,6 +1,6 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using AbrRunoff.Core;
-using Topomatic.Alg.Road;
+using Topomatic.Alg;
 
 namespace AbrRunoff.Robur
 {
@@ -11,7 +11,7 @@ namespace AbrRunoff.Robur
     /// </summary>
     internal static class PipeMatcher
     {
-        internal static List<PipeRef> Read(RoadAlignment road)
+        internal static List<PipeRef> Read(Alignment road)
         {
             var list = new List<PipeRef>();
             try

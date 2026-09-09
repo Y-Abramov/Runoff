@@ -25,7 +25,12 @@ namespace AbrRunoff.Robur
                 if (!owner.RoadNames.Contains(rr.Name)) continue;
 
                 elements.AddRange(new RoadDitchSource(rr.Road, rr.Name).Read(settings));
-                elements.AddRange(new RoadTraySource(rr.Road, rr.Name).Read(settings));
+
+                // Лотки - дорожная специфика (Topomatic.Road.Trays): у ЖД пути их нет,
+                // источник запускаем только для автодороги.
+                var asRoad = rr.Road as Topomatic.Alg.Road.RoadAlignment;
+                if (asRoad != null)
+                    elements.AddRange(new RoadTraySource(asRoad, rr.Name).Read(settings));
                 CollectPipes(pipes, rr);      // запасной путь: трубы в самой дороге
             }
 

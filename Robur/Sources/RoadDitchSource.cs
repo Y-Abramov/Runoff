@@ -1,7 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using AbrRunoff.Core;
 using AbrRunoff.Core.Network;
-using Topomatic.Alg.Road;
+using Topomatic.Alg;
 using Topomatic.Cad.Foundation;
 
 namespace AbrRunoff.Robur.Sources
@@ -12,10 +12,10 @@ namespace AbrRunoff.Robur.Sources
     /// </summary>
     internal sealed class RoadDitchSource : IDrainageSource
     {
-        private readonly RoadAlignment m_Road;
+        private readonly Alignment m_Road;
         private readonly string m_Name;
 
-        internal RoadDitchSource(RoadAlignment road, string name)
+        internal RoadDitchSource(Alignment road, string name)
         {
             m_Road = road;
             m_Name = name;

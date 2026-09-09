@@ -1,5 +1,5 @@
-using System;
-using Topomatic.Alg.Road;
+﻿using System;
+using Topomatic.Alg;
 using Topomatic.Cad.Foundation;
 
 namespace AbrRunoff.Robur
@@ -13,7 +13,7 @@ namespace AbrRunoff.Robur
     {
         private readonly CompoundLine m_Line;
 
-        internal PlanProjector(RoadAlignment road)
+        internal PlanProjector(Alignment road)
         {
             m_Line = road.Plan.CompoundLine;
         }

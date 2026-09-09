@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Topomatic.ApplicationPlatform.Plugins;
 using Topomatic.Controls.Dialogs;
 using ReportNs = AbrRunoff.Report;
@@ -20,7 +20,7 @@ namespace AbrRunoff
             var roads = Robur.RoadAccess.GetOpenRoads();
             if (roads.Count == 0)
             {
-                MessageDlg.Show("В проекте нет открытых дорожных моделей.");
+                MessageDlg.Show("В проекте нет открытых трасс (автодорог или ЖД путей).");
                 return;
             }
 
@@ -257,7 +257,7 @@ namespace AbrRunoff
         public void BuildNetwork()
         {
             var roads = Robur.RoadAccess.GetOpenRoads();
-            if (roads.Count == 0) { MessageDlg.Show("В проекте нет открытых дорожных моделей."); return; }
+            if (roads.Count == 0) { MessageDlg.Show("В проекте нет открытых трасс (автодорог или ЖД путей)."); return; }
 
             var drawing = ActiveDrawing();
             if (drawing == null) { MessageDlg.Show("Не найден активный чертёж."); return; }

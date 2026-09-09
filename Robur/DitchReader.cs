@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using AbrRunoff.Core;
-using Topomatic.Alg.Road;
+using Topomatic.Alg;
 
 namespace AbrRunoff.Robur
 {
@@ -47,7 +47,7 @@ namespace AbrRunoff.Robur
         }
 
         /// <summary>Пикеты для сэмплирования: равномерный шаг + станции сечений + границы.</summary>
-        internal static List<double> BuildStations(RoadAlignment road, double step)
+        internal static List<double> BuildStations(Alignment road, double step)
         {
             var set = new SortedSet<double>();
 #pragma warning disable 612 // StartStation - [Obsolete] без сообщения и без замены, работает
@@ -83,7 +83,7 @@ namespace AbrRunoff.Robur
         /// Полное сэмплирование всех дорог проекта повесило бы диалог, поэтому
         /// пробуем 20 станций. Цена: кювет короче 1/20 длины трассы пропустится.
         /// </summary>
-        internal static bool HasAnyDitch(RoadAlignment road)
+        internal static bool HasAnyDitch(Alignment road)
         {
 #pragma warning disable 612 // StartStation - [Obsolete] без сообщения и без замены, работает
             double start = road.StartStation;
@@ -104,7 +104,7 @@ namespace AbrRunoff.Robur
         }
 
         /// <summary>Читает отсчёты одной стороны. warning != null - геометрия дна не найдена.</summary>
-        internal static List<DitchSample> Read(RoadAlignment road, DitchSide side,
+        internal static List<DitchSample> Read(Alignment road, DitchSide side,
                                                IList<double> stations, out string warning)
         {
             warning = null;
@@ -195,7 +195,7 @@ namespace AbrRunoff.Robur
             return -1;
         }
 
-        private static IDictionary<string, object> GetParams(RoadAlignment road, double station)
+        private static IDictionary<string, object> GetParams(Alignment road, double station)
         {
             try { return road.Parameters.GetStationParams<object>(station); }
             catch { return null; }

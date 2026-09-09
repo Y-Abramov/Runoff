@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
@@ -23,7 +23,7 @@ namespace AbrRunoff.UI
             Settings = defaults.Clone();
             Selected = new List<RoadAccess.RoadRef>();
 
-            Text = "Схема стока: выбор дорог";
+            Text = "Схема стока: выбор трасс";
             Font = new Font("Segoe UI", 9f);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = MinimizeBox = false;
@@ -39,7 +39,10 @@ namespace AbrRunoff.UI
                 try { hasDitch = DitchReader.HasAnyDitch(roads[i].Road); }
                 catch { }
                 m_HasDitch[i] = hasDitch;
-                m_List.Items.Add(hasDitch ? roads[i].Name : roads[i].Name + "  (кювет не найден)");
+                // Вид пути в подписи: автодороги и ЖД пути лежат в одном списке,
+                // по имени модели их не различить.
+                string label = roads[i].Name + "  [" + roads[i].KindTitle + "]";
+                m_List.Items.Add(hasDitch ? label : label + "  (кювет не найден)");
             }
 
             m_List.Location = new Point(12, 12);

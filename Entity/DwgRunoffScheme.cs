@@ -147,8 +147,8 @@ namespace AbrRunoff.Entity
             m_SnapRight.Clear(); m_SnapRight.AddRange(right);
         }
 
-        /// <summary>Находит свою дорогу среди открытых по имени модели.</summary>
-        private RoadAlignment FindRoad()
+        /// <summary>Находит свою трассу (автодорогу либо ЖД путь) среди открытых по имени модели.</summary>
+        private Topomatic.Alg.Alignment FindRoad()
         {
             foreach (var rr in RoadAccess.GetOpenRoads())
                 if (string.Equals(rr.Name, m_RoadName, StringComparison.OrdinalIgnoreCase))
