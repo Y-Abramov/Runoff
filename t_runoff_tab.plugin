@@ -6,17 +6,17 @@
   "ribbon": {
     "rbproj": {
       "items": [
-        { "group": "runoff", "title": "Схема стока", "flags": "$(rf_tab_visible)" }
+        { "group": "runoff", "title": "РЎС…РµРјР° СЃС‚РѕРєР°", "flags": "$(rf_tab_visible)" }
       ]
     },
     "rbproj.runoff": {
       "items": [
-        { "group": "runoff_scheme",  "title": "Схема" },
-        { "group": "runoff_network", "title": "Сеть" },
-        { "group": "runoff_watershed", "title": "��������" },
-        { "group": "runoff_report",  "title": "Ведомости" },
-        { "group": "runoff_service", "title": "Сервис" },
-        { "group": "runoff_close",   "title": "Закрыть" }
+        { "group": "runoff_scheme",  "title": "РЎС…РµРјР°" },
+        { "group": "runoff_network", "title": "РЎРµС‚СЊ" },
+        { "group": "runoff_watershed", "title": "Водосбор" },
+        { "group": "runoff_report",  "title": "Р’РµРґРѕРјРѕСЃС‚Рё" },
+        { "group": "runoff_service", "title": "РЎРµСЂРІРёСЃ" },
+        { "group": "runoff_close",   "title": "Р—Р°РєСЂС‹С‚СЊ" }
       ]
     },
     "rbproj.runoff.runoff_scheme": {
