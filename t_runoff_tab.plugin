@@ -13,6 +13,7 @@
       "items": [
         { "group": "runoff_scheme",  "title": "Схема" },
         { "group": "runoff_network", "title": "Сеть" },
+        { "group": "runoff_watershed", "title": "��������" },
         { "group": "runoff_report",  "title": "Ведомости" },
         { "group": "runoff_service", "title": "Сервис" },
         { "group": "runoff_close",   "title": "Закрыть" }
@@ -33,6 +34,14 @@
       ]
     },
 
+    "rbproj.runoff.runoff_watershed": {
+      "items": [
+        { "button": "rf_watershed",         "size": "large" },
+        { "button": "rf_watershed_update",  "size": "small" },
+        { "button": "rf_watershed_explode", "size": "small" }
+      ]
+    },
+
     "rbproj.runoff.runoff_report": {
       "items": [
         {
@@ -41,6 +50,7 @@
           "items": [
             "rf_report",
             "rf_network_report",
+            "rf_watershed_report",
             "-",
             "rf_legend"
           ]

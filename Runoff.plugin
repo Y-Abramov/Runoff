@@ -108,7 +108,7 @@
       "cmd":         "runoff_watershed_explode",
       "title":       "Взорвать водосбор",
       "description": "Разложить водосбор в штатные примитивы",
-      "icon":        "rf_explode"
+      "icon":        "ws_explode"
     }
   },
 
