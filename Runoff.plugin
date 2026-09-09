@@ -85,6 +85,30 @@
       "title":       "Ведомость бассейнов",
       "description": "Бассейны, выпуски и диагнозы сети водоотвода",
       "icon":        "rf_network_report"
+    },
+    "rf_watershed": {
+      "cmd":         "runoff_watershed",
+      "title":       "Водосбор",
+      "description": "Построить площадь водосбора и главный лог по поверхности рельефа",
+      "icon":        "ws_build"
+    },
+    "rf_watershed_update": {
+      "cmd":         "runoff_watershed_update",
+      "title":       "Пересчитать водосборы",
+      "description": "Пересчитать устаревшие водосборы чертежа",
+      "icon":        "ws_update"
+    },
+    "rf_watershed_report": {
+      "cmd":         "runoff_watershed_report",
+      "title":       "Ведомость водосборов",
+      "description": "Площадь, длина и уклоны всех водосборов чертежа",
+      "icon":        "ws_report"
+    },
+    "rf_watershed_explode": {
+      "cmd":         "runoff_watershed_explode",
+      "title":       "Взорвать водосбор",
+      "description": "Разложить водосбор в штатные примитивы",
+      "icon":        "rf_explode"
     }
   },
 
@@ -118,6 +142,11 @@
         "rf_report",
         "rf_network_report",
         "rf_legend",
+        "-",
+        "rf_watershed",
+        "rf_watershed_update",
+        "rf_watershed_report",
+        "rf_watershed_explode",
         "-",
         "rf_about"
       ]

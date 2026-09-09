@@ -422,5 +422,182 @@ namespace AbrRunoff
             return any;
         }
 
+        [cmd("runoff_watershed")]
+        public void Watershed()
+        {
+            var surfaces = Robur.SurfaceAccess.GetSurfaces();
+            if (surfaces.Count == 0)
+            {
+                MessageDlg.Show("В проекте нет моделей рельефа. Загрузите съёмку или постройте ЦММ по открытым данным (модуль DemLoader).");
+                return;
+            }
+
+            var drawing = ActiveDrawing();
+            if (drawing == null) { MessageDlg.Show("Не найден активный чертёж."); return; }
+
+            using (var dlg = new UI.WatershedDialog(surfaces, Robur.CulvertAccess.GetOpenCulverts(),
+                                                    CadView, new Core.Watershed.WatershedSettings()))
+            {
+                if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+
+                var errors = new System.Collections.Generic.List<string>();
+                foreach (var built in dlg.Results)
+                {
+                    if (built.Result == null) { errors.Add(built.OutletName + ": " + built.Error); continue; }
+
+                    var entity = new Entity.DwgWatershed();
+                    entity.SetResult(built.SurfaceName, built.DesignSurfaceName, built.OutletName,
+                                     built.OutletX, built.OutletY, built.Step, built.Settings,
+                                     built.SourceHash, built.Result);
+                    drawing.ActiveSpace.Add(entity);
+                }
+
+                CadView.Unlock();
+                CadView.Invalidate();
+
+                if (errors.Count > 0)
+                    MessageDlg.Show("Не удалось построить:\r\n" + string.Join("\r\n", errors.ToArray()));
+            }
+        }
+
+        [cmd("runoff_watershed_update")]
+        public void WatershedUpdate()
+        {
+            var drawing = ActiveDrawing();
+            if (drawing == null) { MessageDlg.Show("Не найден активный чертёж."); return; }
+
+            var surfaces = Robur.SurfaceAccess.GetSurfaces();
+            int updated = 0;
+
+            foreach (Topomatic.Dwg.Entities.DwgEntity e in drawing.ActiveSpace)
+            {
+                var ws = e as Entity.DwgWatershed;
+                if (ws == null || ws.Snapshot == null) continue;
+
+                var surface = FindSurface(surfaces, ws.SurfaceName);
+                if (surface == null) continue;   // поверхность закрыта/удалена - не трогаем
+                var design = string.IsNullOrEmpty(ws.DesignSurfaceName) ? null : FindSurface(surfaces, ws.DesignSurfaceName);
+
+                string currentHash = Robur.SurfaceReader.ComputeSourceHash(surface, design, ws.OutletX, ws.OutletY, ws.Step);
+                ws.CheckStale(currentHash);
+                if (!ws.IsStale) continue;
+
+                var request = new Robur.WatershedRequest { OutletName = ws.OutletName, X = ws.OutletX, Y = ws.OutletY };
+                var built = Robur.WatershedBuilder.Build(surface, design, ws.Step, ws.Settings,
+                    new System.Collections.Generic.List<Robur.WatershedRequest> { request }, null);
+
+                if (built.Count == 1 && built[0].Result != null)
+                {
+                    ws.SetResult(built[0].SurfaceName, built[0].DesignSurfaceName, built[0].OutletName,
+                                built[0].OutletX, built[0].OutletY, built[0].Step, built[0].Settings,
+                                built[0].SourceHash, built[0].Result);
+                    updated++;
+                }
+            }
+
+            CadView.Unlock();
+            CadView.Invalidate();
+            MessageDlg.Show(updated == 0 ? "Устаревших водосборов не найдено." : "Пересчитано водосборов: " + updated + ".");
+        }
+
+        [cmd("runoff_watershed_report")]
+        public void WatershedReportCmd()
+        {
+            if (s_WatershedReportForm != null && !s_WatershedReportForm.IsDisposed)
+            {
+                s_WatershedReportForm.BringToFront();
+                return;
+            }
+
+            var drawing = ActiveDrawing();
+            if (drawing == null) { MessageDlg.Show("Не найден активный чертёж."); return; }
+
+            var results = new System.Collections.Generic.List<Core.Watershed.WatershedResult>();
+            foreach (Topomatic.Dwg.Entities.DwgEntity e in drawing.ActiveSpace)
+            {
+                var ws = e as Entity.DwgWatershed;
+                if (ws != null && ws.Snapshot != null) results.Add(ws.Snapshot);
+            }
+
+            if (results.Count == 0)
+            {
+                MessageDlg.Show("В чертеже нет водосборов. Постройте их командой «Водосбор».");
+                return;
+            }
+
+            var rows = ReportNs.WatershedReport.Build(results);
+            var view = CadView;
+            s_WatershedReportForm = new UI.WatershedReportForm(rows);
+            s_WatershedReportForm.PlaceTable = delegate (System.Collections.Generic.List<ReportNs.WatershedRow> r)
+            {
+                Topomatic.Cad.Foundation.Vector3D point;
+                if (!Topomatic.Cad.View.Hints.CadCursors.GetPoint(view, out point, "Точка вставки таблицы:"))
+                    return;
+                ReportNs.ReportTablePlacer.Place(drawing.ActiveSpace,
+                    new Topomatic.Cad.Foundation.Vector2D(point.X, point.Y), r, 1.5);
+                view.Unlock();
+                view.Invalidate();
+            };
+            s_WatershedReportForm.Show();
+        }
+
+        [cmd("runoff_watershed_explode")]
+        public void WatershedExplode()
+        {
+            var ws = FirstSelectedWatershed();
+            if (ws == null) { MessageDlg.Show("Выберите водосбор на плане и повторите команду."); return; }
+            if (ws.Snapshot == null) { MessageDlg.Show("Водосбор ещё не рассчитан."); return; }
+
+            var drawing = ActiveDrawing();
+            if (drawing == null) { MessageDlg.Show("Не найден активный чертёж."); return; }
+
+            // Детальная геометрия: взрыв делают для передачи, LOD там ни к чему.
+            var block = ws.GetPlanBlock(true);
+            if (block == null || block.Count == 0)
+            {
+                MessageDlg.Show("Водосбор пуст, взрывать нечего.");
+                return;
+            }
+
+            var space = drawing.ActiveSpace;
+            foreach (Topomatic.Dwg.Entities.DwgEntity src in block)
+            {
+                var copy = src.Clone() as Topomatic.Dwg.Entities.DwgEntity;
+                if (copy != null) space.Add(copy);
+            }
+            space.Entities.Remove(ws);
+
+            CadView.Unlock();
+            CadView.Invalidate();
+        }
+
+        private static UI.WatershedReportForm s_WatershedReportForm;
+
+        private Entity.DwgWatershed FirstSelectedWatershed()
+        {
+            var drawing = ActiveDrawing();
+            if (drawing == null) return null;
+            Entity.DwgWatershed any = null;
+            try
+            {
+                foreach (Topomatic.Dwg.Entities.DwgEntity e in drawing.ActiveSpace)
+                {
+                    var w = e as Entity.DwgWatershed;
+                    if (w == null) continue;
+                    if (w.IsSelected) return w;
+                    if (any == null) any = w;
+                }
+            }
+            catch { }
+            return any;
+        }
+
+        private static Robur.SurfaceRef FindSurface(System.Collections.Generic.List<Robur.SurfaceRef> surfaces, string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            foreach (var s in surfaces)
+                if (string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)) return s;
+            return null;
+        }
     }
 }
