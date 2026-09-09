@@ -59,6 +59,22 @@ namespace AbrRunoff.Robur
         /// единственным выходом воды - иначе сток «переливается» через земляное
         /// полотно, которого в естественном рельефе нет.
         /// </summary>
+        /// <summary>
+        /// Хеш исходных данных водосбора: поверхность (имя + число треугольников +
+        /// габарит), проектная поверхность, запрошенная точка створа, шаг. Смена
+        /// любого - расчёт устарел. Строка, не число: сравнение строк дешевле
+        /// повторного обхода TIN, и не нужно подбирать алгоритм хеширования.
+        /// </summary>
+        internal static string ComputeSourceHash(SurfaceRef surface, SurfaceRef design,
+                                                 double outletX, double outletY, double step)
+        {
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            var b = surface.Bounds;
+            return string.Format(ci, "{0}|{1}|{2:R},{3:R},{4:R},{5:R}|{6}|{7:R},{8:R}|{9:R}",
+                surface.Name, surface.TriangleCount, b.Left, b.Bottom, b.Right, b.Top,
+                design == null ? "" : design.Name, outletX, outletY, step);
+        }
+
         internal static int BurnDesign(Grid g, SurfaceRef design)
         {
             int burned = 0;

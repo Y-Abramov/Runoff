@@ -26,6 +26,10 @@ namespace AbrRunoff
                 Topomatic.Dwg.Drawing.RegisterActivator(
                     Entity.DwgDrainageNetwork.ENTITY_NAME,
                     delegate { return new Entity.DwgDrainageNetwork(); });
+
+                Topomatic.Dwg.Drawing.RegisterActivator(
+                    Entity.DwgWatershed.ENTITY_NAME,
+                    delegate { return new Entity.DwgWatershed(); });
             }
             catch { }
         }
