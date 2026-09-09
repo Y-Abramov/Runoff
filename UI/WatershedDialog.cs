@@ -179,7 +179,20 @@ namespace AbrRunoff.UI
 
         private void OnPickPoint(object sender, EventArgs e)
         {
-            if (m_CadView == null) return;
+            if (m_CadView == null)
+            {
+                MessageBox.Show(this, "Нет доступа к плану чертежа.", "Водосбор",
+                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // ShowDialog() отключает окно, которое было активным на момент открытия
+            // (обычно главное окно Robur) - Hide() это не снимает, и клик в плане
+            // никуда не долетает, GetPoint висит без обратной связи. Явно находим
+            // и на время включаем все окна, отключённые нашей модальностью.
+            var reDisable = new List<Form>();
+            foreach (Form f in Application.OpenForms)
+                if (f != this && !f.Enabled) { reDisable.Add(f); f.Enabled = true; }
 
             Hide();
             try
@@ -197,7 +210,11 @@ namespace AbrRunoff.UI
                     m_Outlets.Items.Add(FormatOutlet(req), true);
                 }
             }
-            finally { Show(); }
+            finally
+            {
+                foreach (var f in reDisable) f.Enabled = false;
+                Show();
+            }
         }
 
         private void OnBuild(object sender, EventArgs e)
