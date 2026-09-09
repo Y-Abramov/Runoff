@@ -186,13 +186,16 @@ namespace AbrRunoff.UI
                 return;
             }
 
-            // ShowDialog() отключает окно, которое было активным на момент открытия
-            // (обычно главное окно Robur) - Hide() это не снимает, и клик в плане
-            // никуда не долетает, GetPoint висит без обратной связи. Явно находим
-            // и на время включаем все окна, отключённые нашей модальностью.
-            var reDisable = new List<Form>();
-            foreach (Form f in Application.OpenForms)
-                if (f != this && !f.Enabled) { reDisable.Add(f); f.Enabled = true; }
+            // ShowDialog() выключает (WS_DISABLED) нативное окно-владельца, активное
+            // на момент открытия - обычно главное окно Robur. Hide() это не снимает:
+            // клик в плане не долетает, GetPoint висит без обратной связи. Application.
+            // OpenForms не годится, если владелец - не управляемый .NET Form (похоже,
+            // так и есть - первая попытка через него результата не дала). Берём хендл
+            // владельца НАПРЯМУЮ через Win32 GetWindow(GW_OWNER) и включаем его -
+            // работает независимо от того, чем является окно-владелец.
+            IntPtr ownerHandle = GetWindow(Handle, GW_OWNER);
+            bool ownerWasDisabled = ownerHandle != IntPtr.Zero && !IsWindowEnabled(ownerHandle);
+            if (ownerWasDisabled) EnableWindow(ownerHandle, true);
 
             Hide();
             try
@@ -212,10 +215,21 @@ namespace AbrRunoff.UI
             }
             finally
             {
-                foreach (var f in reDisable) f.Enabled = false;
+                if (ownerWasDisabled) EnableWindow(ownerHandle, false);
                 Show();
             }
         }
+
+        private const uint GW_OWNER = 4;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool EnableWindow(IntPtr hWnd, bool bEnable);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool IsWindowEnabled(IntPtr hWnd);
 
         private void OnBuild(object sender, EventArgs e)
         {
