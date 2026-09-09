@@ -19,6 +19,9 @@ namespace AbrRunoff.Report
         public double MeanBasinSlope;
         public string Status;
         public bool IsProblem;
+
+        /// <summary>Исходный результат - для окна ведомости (профиль лога и т.п.), не для экспорта.</summary>
+        public WatershedResult Source;
     }
 
     /// <summary>Строки ведомости водосборов. Без Topomatic - линкуется в тесты.</summary>
@@ -52,7 +55,8 @@ namespace AbrRunoff.Report
                     OutletZ = r.OutletZ,
                     MeanBasinSlope = r.MeanBasinSlope,
                     Status = string.Join("; ", r.Statuses),
-                    IsProblem = r.HasProblem
+                    IsProblem = r.HasProblem,
+                    Source = r
                 });
             }
 

@@ -512,22 +512,21 @@ namespace AbrRunoff
             var drawing = ActiveDrawing();
             if (drawing == null) { MessageDlg.Show("Не найден активный чертёж."); return; }
 
-            var results = new System.Collections.Generic.List<Core.Watershed.WatershedResult>();
+            var entities = new System.Collections.Generic.List<Entity.DwgWatershed>();
             foreach (Topomatic.Dwg.Entities.DwgEntity e in drawing.ActiveSpace)
             {
                 var ws = e as Entity.DwgWatershed;
-                if (ws != null && ws.Snapshot != null) results.Add(ws.Snapshot);
+                if (ws != null && ws.Snapshot != null) entities.Add(ws);
             }
 
-            if (results.Count == 0)
+            if (entities.Count == 0)
             {
                 MessageDlg.Show("В чертеже нет водосборов. Постройте их командой «Водосбор».");
                 return;
             }
 
-            var rows = ReportNs.WatershedReport.Build(results);
             var view = CadView;
-            s_WatershedReportForm = new UI.WatershedReportForm(rows);
+            s_WatershedReportForm = new UI.WatershedReportForm(entities);
             s_WatershedReportForm.PlaceTable = delegate (System.Collections.Generic.List<ReportNs.WatershedRow> r)
             {
                 Topomatic.Cad.Foundation.Vector3D point;

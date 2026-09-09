@@ -236,6 +236,15 @@ namespace AbrRunoff.Entity
             for (int i = 0; i < r.Contour.Count; i++) rings[i] = SerializePoints(r.Contour[i]);
             node.AddString("contour", string.Join("~", rings));
             node.AddString("path", SerializePoints(r.Path));
+
+            // Отметки вдоль лога от створа вверх - для профиля лога (LogProfile),
+            // чтобы кнопка «Профиль в CSV» работала и после перезагрузки чертежа,
+            // не только сразу после расчёта.
+            var ci = CultureInfo.InvariantCulture;
+            var elevParts = new string[r.PathElevations.Count];
+            for (int i = 0; i < r.PathElevations.Count; i++)
+                elevParts[i] = r.PathElevations[i].ToString("R", ci);
+            node.AddString("pathElev", string.Join(";", elevParts));
         }
 
         private static WatershedResult LoadSnapshot(StgNode node)
@@ -267,6 +276,17 @@ namespace AbrRunoff.Entity
                     r.Contour.Add(DeserializePoints(ring));
 
             r.Path.AddRange(DeserializePoints(node.GetString("path", "")));
+
+            string elevRaw = node.GetString("pathElev", "");
+            if (!string.IsNullOrEmpty(elevRaw))
+            {
+                var ci = CultureInfo.InvariantCulture;
+                foreach (var chunk in elevRaw.Split(';'))
+                {
+                    double z;
+                    if (double.TryParse(chunk, NumberStyles.Float, ci, out z)) r.PathElevations.Add(z);
+                }
+            }
             return r;
         }
 
