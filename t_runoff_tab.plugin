@@ -13,7 +13,7 @@
       "items": [
         { "group": "runoff_scheme",  "title": "Схема" },
         { "group": "runoff_network", "title": "Сеть" },
-        { "group": "runoff_watershed", "title": "��������" },
+        { "group": "runoff_watershed", "title": "Водосбор" },
         { "group": "runoff_report",  "title": "Ведомости" },
         { "group": "runoff_service", "title": "Сервис" },
         { "group": "runoff_close",   "title": "Закрыть" }
