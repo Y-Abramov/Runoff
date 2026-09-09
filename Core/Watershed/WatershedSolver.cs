@@ -38,12 +38,28 @@ namespace AbrRunoff.Core.Watershed
 
             int outlet;
             double shift;
-            if (!PourPoint.TrySnap(g, p.Acc, requested.X, requested.Y, s, out outlet, out shift))
+            bool snapped = PourPoint.TrySnap(g, p.Acc, requested.X, requested.Y, s, out outlet, out shift);
+            if (!snapped)
             {
-                error = "Водотока рядом со створом не найдено: в радиусе " +
-                        s.SnapRadius.ToString("0.#", CultureInfo.CurrentCulture) +
-                        " м нет ячейки с водосбором от " + s.MinChannelCells + " ячеек.";
-                return null;
+                // Водотока рядом нет - НЕ отказываем. Проектировщику нужна площадь
+                // и в произвольной точке склона («сколько собирается вот здесь»),
+                // а отказ выглядит поломкой модуля. Считаем от самой указанной
+                // ячейки и честно пишем статусом, что привязки к тальвегу не было:
+                // площадь тогда мала по делу, а не по ошибке.
+                int ix, iy;
+                if (!g.TryLocate(requested.X, requested.Y, out ix, out iy))
+                {
+                    error = "Точка створа лежит вне поверхности: выберите точку внутри модели рельефа.";
+                    return null;
+                }
+
+                outlet = g.Index(ix, iy);
+                if (!g.HasData(outlet))
+                {
+                    error = "В указанной точке нет отметок рельефа (дыра в поверхности) - водосбор не построить.";
+                    return null;
+                }
+                shift = 0.0;
             }
 
             var mask = WatershedTracer.Trace(g, p.Dir, outlet);
@@ -85,6 +101,12 @@ namespace AbrRunoff.Core.Watershed
             res.PathElevations = elevations;
             res.EndSlope = Metrics.EndSlope(res.HeadZ, res.OutletZ, res.LengthM);
             res.WeightedSlope = Metrics.WeightedSlope(elevations, segments);
+
+            if (!snapped)
+                res.Statuses.Add("Водотока рядом со створом нет (в радиусе " +
+                                 s.SnapRadius.ToString("0.#", CultureInfo.CurrentCulture) +
+                                 " м нет ячейки с водосбором от " + s.MinChannelCells +
+                                 " ячеек) - площадь посчитана от самой указанной точки, не от тальвега");
 
             if (mask.TouchesEdge)
                 res.Statuses.Add("Водосбор упёрся в край поверхности - площадь занижена, нужен рельеф большего охвата");

@@ -9,10 +9,17 @@ namespace AbrRunoff.Entity
 {
     internal static class WatershedGeometry
     {
+        /// <summary>Доля непрозрачности заливки бассейна, %. Тот же порядок, что у зон бассейнов сети (18%).</summary>
+        private const double ZoneOpacityPercent = 15.0;
+
         /// <summary>
-        /// Контур + лог + знаки. Сплошной заливки нет сознательно: площадь в
-        /// квадратные километры, закрашенная сплошняком, забивает план. Зона
-        /// различается редкой штриховкой.
+        /// Контур + лог + знаки. Зона бассейна - лёгкая полупрозрачная заливка
+        /// (решение юзера 2026-09-09: со штриховкой бассейн читался плохо).
+        /// Прозрачность низкая специально: площадь в квадратные километры,
+        /// закрашенная плотно, забивает подложку плана.
+        ///
+        /// Заливается только внешнее кольцо: дырки маски (островки NoData внутри
+        /// водосбора) заливка накроет - редкий случай, известное упрощение.
         ///
         /// Контур целиком красится цветом ошибки при hasProblem: точных границ
         /// проблемного УЧАСТКА контура ядро не отдаёт (WatershedMask.TouchesEdge -
@@ -27,7 +34,7 @@ namespace AbrRunoff.Entity
             for (int k = 0; k < r.Contour.Count; k++)
             {
                 var pts = ToVectors(r.Contour[k]);
-                if (k == 0) GlyphBuilder.ZoneHatched(pts, RunoffStyle.Muted, 45.0, glyphScale * 4.0, emit);
+                if (k == 0) GlyphBuilder.Zone(pts, contourColor, ZoneOpacityPercent, emit);
                 GlyphBuilder.Outline(pts, contourColor, RunoffStyle.LineMain, true, emit);
             }
 
