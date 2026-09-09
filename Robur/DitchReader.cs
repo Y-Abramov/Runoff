@@ -85,6 +85,10 @@ namespace AbrRunoff.Robur
         /// </summary>
         internal static bool HasAnyDitch(Alignment road)
         {
+            // ЖД путь: кювет - отдельная линия трассирования со своим профилем,
+            // точек поперечника с флагом SLOPE_FLAG_USE_DITCH_PROFILE у него нет.
+            if (UsesTransitionDitches(road)) return RailDitchReader.HasDitches(road);
+
 #pragma warning disable 612 // StartStation - [Obsolete] без сообщения и без замены, работает
             double start = road.StartStation;
 #pragma warning restore 612
@@ -107,6 +111,8 @@ namespace AbrRunoff.Robur
         internal static List<DitchSample> Read(Alignment road, DitchSide side,
                                                IList<double> stations, out string warning)
         {
+            if (UsesTransitionDitches(road)) return RailDitchReader.Read(road, side, stations, out warning);
+
             warning = null;
             var keys = SideKeys.For(side);
             var samples = new List<DitchSample>(stations.Count);
@@ -181,6 +187,18 @@ namespace AbrRunoff.Robur
                           " сторона: геометрия дна кювета не найдена ни на одной точке поперечника.";
 
             return samples;
+        }
+
+        /// <summary>
+        /// Читать кюветы линиями трассирования, а не точками поперечника.
+        /// Автодорога - всегда поперечники (проверенный путь, не трогаем).
+        /// Прочие трассы (ЖД путь) - линии, но только если они там реально есть:
+        /// иначе отдаём дорожный путь, вдруг параметры всё же заполнены.
+        /// </summary>
+        private static bool UsesTransitionDitches(Alignment road)
+        {
+            if (road == null || road is Topomatic.Alg.Road.RoadAlignment) return false;
+            return RailDitchReader.HasDitches(road);
         }
 
         private static bool MatchesBottom(IDictionary<string, object> p, SideKeys keys, int idx, double bottomZ)
