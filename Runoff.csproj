@@ -53,6 +53,14 @@
       <HintPath>$(RoburInstallDir)\Topomatic.Dwg.Layer.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Topomatic.Sfc">
+      <HintPath>$(RoburInstallDir)\Topomatic.Sfc.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Topomatic.Dtm">
+      <HintPath>$(RoburInstallDir)\Topomatic.Dtm.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Topomatic.Alg">
       <HintPath>$(RoburInstallDir)\Topomatic.Alg.dll</HintPath>
       <Private>false</Private>

@@ -55,6 +55,14 @@ namespace AbrRunoff.Robur
             return false;
         }
 
+        /// <summary>
+        /// Координаты Vector3D, полученного уже типизированным (не рефлексией) - например,
+        /// SurfacePoint.Vertex. X/Y/Z у Vector3D - поля, читаем напрямую без похода в TryField.
+        /// </summary>
+        internal static double X(Vector3D v) { return v.X; }
+        internal static double Y(Vector3D v) { return v.Y; }
+        internal static double Z(Vector3D v) { return v.Z; }
+
         private static bool TryField(object obj, string name, out double value)
         {
             value = 0.0;
