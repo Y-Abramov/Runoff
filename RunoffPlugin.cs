@@ -36,12 +36,23 @@ namespace AbrRunoff
                 if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
                 RunoffSettingsStore.Save(dlg.Settings);
 
-                foreach (var rr in dlg.Selected)
+                drawing.BeginUpdate();
+                try
                 {
-                    var scheme = new Entity.DwgRunoffScheme();
-                    scheme.RoadName = rr.Name;
-                    scheme.SetSettings(dlg.Settings.Clone());
-                    drawing.ActiveSpace.Add(scheme);
+                    foreach (var rr in dlg.Selected)
+                    {
+                        var scheme = new Entity.DwgRunoffScheme();
+                        scheme.RoadName = rr.Name;
+                        scheme.SetSettings(dlg.Settings.Clone());
+                        drawing.ActiveSpace.Add(scheme);
+                    }
+
+                    CadView.Unlock();
+                    CadView.Invalidate();
+                }
+                finally
+                {
+                    drawing.EndUpdate();
                 }
             }
         }
@@ -467,15 +478,23 @@ namespace AbrRunoff
                     if (result != System.Windows.Forms.DialogResult.OK) return;
 
                     var errors = new System.Collections.Generic.List<string>();
-                    foreach (var built in dlg.Results)
+                    drawing.BeginUpdate();
+                    try
                     {
-                        if (built.Result == null) { errors.Add(built.OutletName + ": " + built.Error); continue; }
+                        foreach (var built in dlg.Results)
+                        {
+                            if (built.Result == null) { errors.Add(built.OutletName + ": " + built.Error); continue; }
 
-                        var entity = new Entity.DwgWatershed();
-                        entity.SetResult(built.SurfaceName, built.DesignSurfaceName, built.OutletName,
-                                         built.OutletX, built.OutletY, built.Step, built.Settings,
-                                         built.SourceHash, built.Result);
-                        drawing.ActiveSpace.Add(entity);
+                            var entity = new Entity.DwgWatershed();
+                            entity.SetResult(built.SurfaceName, built.DesignSurfaceName, built.OutletName,
+                                             built.OutletX, built.OutletY, built.Step, built.Settings,
+                                             built.SourceHash, built.Result);
+                            drawing.ActiveSpace.Add(entity);
+                        }
+                    }
+                    finally
+                    {
+                        drawing.EndUpdate();
                     }
 
                     CadView.Unlock();
@@ -497,30 +516,38 @@ namespace AbrRunoff
             var surfaces = Robur.SurfaceAccess.GetSurfaces();
             int updated = 0;
 
-            foreach (Topomatic.Dwg.Entities.DwgEntity e in drawing.ActiveSpace)
+            drawing.BeginUpdate();
+            try
             {
-                var ws = e as Entity.DwgWatershed;
-                if (ws == null || ws.Snapshot == null) continue;
-
-                var surface = FindSurface(surfaces, ws.SurfaceName);
-                if (surface == null) continue;   // поверхность закрыта/удалена - не трогаем
-                var design = string.IsNullOrEmpty(ws.DesignSurfaceName) ? null : FindSurface(surfaces, ws.DesignSurfaceName);
-
-                string currentHash = Robur.SurfaceReader.ComputeSourceHash(surface, design, ws.OutletX, ws.OutletY, ws.Step);
-                ws.CheckStale(currentHash);
-                if (!ws.IsStale) continue;
-
-                var request = new Robur.WatershedRequest { OutletName = ws.OutletName, X = ws.OutletX, Y = ws.OutletY };
-                var built = Robur.WatershedBuilder.Build(surface, design, ws.Step, ws.Settings,
-                    new System.Collections.Generic.List<Robur.WatershedRequest> { request }, null);
-
-                if (built.Count == 1 && built[0].Result != null)
+                foreach (Topomatic.Dwg.Entities.DwgEntity e in drawing.ActiveSpace)
                 {
-                    ws.SetResult(built[0].SurfaceName, built[0].DesignSurfaceName, built[0].OutletName,
-                                built[0].OutletX, built[0].OutletY, built[0].Step, built[0].Settings,
-                                built[0].SourceHash, built[0].Result);
-                    updated++;
+                    var ws = e as Entity.DwgWatershed;
+                    if (ws == null || ws.Snapshot == null) continue;
+
+                    var surface = FindSurface(surfaces, ws.SurfaceName);
+                    if (surface == null) continue;   // поверхность закрыта/удалена - не трогаем
+                    var design = string.IsNullOrEmpty(ws.DesignSurfaceName) ? null : FindSurface(surfaces, ws.DesignSurfaceName);
+
+                    string currentHash = Robur.SurfaceReader.ComputeSourceHash(surface, design, ws.OutletX, ws.OutletY, ws.Step);
+                    ws.CheckStale(currentHash);
+                    if (!ws.IsStale) continue;
+
+                    var request = new Robur.WatershedRequest { OutletName = ws.OutletName, X = ws.OutletX, Y = ws.OutletY };
+                    var built = Robur.WatershedBuilder.Build(surface, design, ws.Step, ws.Settings,
+                        new System.Collections.Generic.List<Robur.WatershedRequest> { request }, null);
+
+                    if (built.Count == 1 && built[0].Result != null)
+                    {
+                        ws.SetResult(built[0].SurfaceName, built[0].DesignSurfaceName, built[0].OutletName,
+                                    built[0].OutletX, built[0].OutletY, built[0].Step, built[0].Settings,
+                                    built[0].SourceHash, built[0].Result);
+                        updated++;
+                    }
                 }
+            }
+            finally
+            {
+                drawing.EndUpdate();
             }
 
             CadView.Unlock();
@@ -557,13 +584,21 @@ namespace AbrRunoff
             s_WatershedReportForm = new UI.WatershedReportForm(entities);
             s_WatershedReportForm.PlaceTable = delegate (System.Collections.Generic.List<ReportNs.WatershedRow> r)
             {
-                Topomatic.Cad.Foundation.Vector3D point;
-                if (!Topomatic.Cad.View.Hints.CadCursors.GetPoint(view, out point, "Точка вставки таблицы:"))
-                    return;
-                ReportNs.ReportTablePlacer.Place(drawing.ActiveSpace,
-                    new Topomatic.Cad.Foundation.Vector2D(point.X, point.Y), r, 1.5);
-                view.Unlock();
-                view.Invalidate();
+                drawing.BeginUpdate();
+                try
+                {
+                    Topomatic.Cad.Foundation.Vector3D point;
+                    if (!Topomatic.Cad.View.Hints.CadCursors.GetPoint(view, out point, "Точка вставки таблицы:"))
+                        return;
+                    ReportNs.ReportTablePlacer.Place(drawing.ActiveSpace,
+                        new Topomatic.Cad.Foundation.Vector2D(point.X, point.Y), r, 1.5);
+                    view.Unlock();
+                    view.Invalidate();
+                }
+                finally
+                {
+                    drawing.EndUpdate();
+                }
             };
             s_WatershedReportForm.Show();
         }
@@ -587,12 +622,20 @@ namespace AbrRunoff
             }
 
             var space = drawing.ActiveSpace;
-            foreach (Topomatic.Dwg.Entities.DwgEntity src in block)
+            drawing.BeginUpdate();
+            try
             {
-                var copy = src.Clone() as Topomatic.Dwg.Entities.DwgEntity;
-                if (copy != null) space.Add(copy);
+                foreach (Topomatic.Dwg.Entities.DwgEntity src in block)
+                {
+                    var copy = src.Clone() as Topomatic.Dwg.Entities.DwgEntity;
+                    if (copy != null) space.Add(copy);
+                }
+                space.Entities.Remove(ws);
             }
-            space.Entities.Remove(ws);
+            finally
+            {
+                drawing.EndUpdate();
+            }
 
             CadView.Unlock();
             CadView.Invalidate();
